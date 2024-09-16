@@ -4,26 +4,43 @@ local fs_advanced = require("bios.filesystem")
 local bios = require("bios.bios")
 
 local temp_partition_name = "primeos"
+local temp_bootsector_name = "bootsector"
 
 log.info("Starting System Building...")
 
 partition.init()
-partition.delete(temp_partition_name)
-partition.create(temp_partition_name, temp_partition_name)
 
+partition.delete(temp_partition_name)
+partition.delete(temp_bootsector_name)
+
+partition.create(temp_partition_name, temp_partition_name)
+partition.create(temp_bootsector_name, temp_bootsector_name, true)
+
+local boot = fs_advanced.create("part", temp_bootsector_name)
 local part = fs_advanced.create("part", temp_partition_name)
 
-if not part then
+if not part or not boot then
     error("Build Failed. (Cannot create the filesystem partition handler.)")
 end
 
-part.copyFile("/build/*", "/")
+local s, e = pcall(function ()
+    fs.copy("/build/bootloader/*", boot.getLocalPath())
+    fs.copy("/build/os/*", part.getLocalPath())
+end)
+if not s then
+    partition.delete(temp_partition_name)
+    partition.delete(temp_bootsector_name)
+    local file = fs.open("error", "w+")
+    file.write(e)
+    file.close()
+    error(e, 0)
+end
 
 print("Build ended. Press any key to start test.")
 os.pullEvent("key")
 
 local s, e = xpcall(function ()
-    bios.execute(part.getLocalPath().."/boot/kernel.lua")
+    bios.run()
 end, debug.traceback)
 
 if not s then
@@ -35,3 +52,4 @@ print("Test ended. Press any key to continue.")
 os.pullEvent("key")
 
 partition.delete(temp_partition_name)
+partition.delete(temp_bootsector_name)

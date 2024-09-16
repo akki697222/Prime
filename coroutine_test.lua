@@ -1,11 +1,15 @@
 local coroutines = {}
 
 table.insert(coroutines, coroutine.create(function()
-    
+    while true do
+        print("a")
+    end
 end))
 
 table.insert(coroutines, coroutine.create(function()
-    
+    while true do
+        print("b")
+    end
 end))
 
 while true do

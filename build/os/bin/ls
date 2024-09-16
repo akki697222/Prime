@@ -1,0 +1,12 @@
+local args = {...}
+if kernel == nil and type(printf) ~= "function" then error("Not Prime") return end
+
+if not args[1] then
+    args[1] = "/"
+end
+local list = kernel.fs.list(args[1])
+if list then
+    for index, value in ipairs(list) do
+        printf(value)
+    end
+end

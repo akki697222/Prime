@@ -5,41 +5,40 @@ local requires = {
     filesystem = "bios.filesystem",
     log = "bios.log",
     partition = "bios.partition",
+    graphics = "bios.graphics",
+    io = "bios.io",
 }
-local log = require(requires.log)
-local part = require(requires.partition)
-local bios = {}
+local part = require("bios.partition")
+local bios = {native = {
+    term = term
+}}
 
 function bios.init()
-    log.info("Initializing BIOS...")
     part.init()
-    log.info("BIOS Initialize Complete.")
+end
+
+function bios.uptime()
+    return os.clock()
 end
 
 function bios.post()
-    print()
     local function checkGlobal()
         if not shell or not term or not fs then return false end
         return true
     end
     if not checkGlobal() then
-        log.error("This program can only be run on CC: Tweaked", 0)
+        print("This program can only be run on CC: Tweaked", 0)
     else
         term.setCursorBlink(true)
     end
-    local function fail(...)
-        log.error(...)
-        print("BIOS Startup Check Failed. Press any key to exit...")
-        local event, key = os.pullEvent("key")
-        error("",0)
-    end
-
+    print("Booting from Storage...")
+    bios.execute(part.directories.disk .. "bootsector/bootloader.lua")
 end
 
 function bios.run()
     term.clear()
-    term.setCursorPos(1,1)
-    print("CC:T Advanced BIOS")
+    term.setCursorPos(1, 1)
+    print("Prime BIOS (version 0.0.1-0.craftos)\n")
     bios.init()
     bios.post()
 end
@@ -60,38 +59,104 @@ function bios.queueEvent(event, ...)
     os.queueEvent(event, ...)
 end
 
+function bios.getID()
+    return os.getComputerID()
+end
+
+function bios.getName()
+    return os.getComputerLabel() or "Unknown"
+end
+
 function bios.execute(path)
     local func, err = loadfile(path)
     if not func then
-        log.fatal(err, "Failed to load file.")
+        print(err.."Failed to load file.")
         return
     end
+    local computer = require(requires.computer)
+    local device = require(requires.device)
+    local filesystem = require(requires.filesystem)
+    local monitor = require(requires.graphics)
+    local input_output = require(requires.io)
     local env = setmetatable({
         bios = bios,
-        computer = require(requires.computer),
-        device = require(requires.device),
-        fs = require(requires.filesystem),
-        partition = require(requires.partition),
-        syslog = require(requires.log)
+        computer = computer,
+        device = device,
+        filesystem = filesystem,
+        partition = part,
+        log = log,
+        monitor = monitor,
+
+        table = table,
+        textutils = textutils,
+        colors = colors,
+        coroutine = coroutine,
+
+        printf = print,
+        write = io.write,
+        pairs = pairs,
+        ipairs = ipairs,
+        tonumber = tonumber,
+        tostring = tostring,
+        read = read,
+        pcall = pcall,
+        xpcall = xpcall,
     }, {})
     if setfenv then
         setfenv(func, env)
         func()
     elseif _VERSION == "Lua 5.2" then
         _ENV = env
-        local func, err = loadfile(path)
-        if not func then
-            log.fatal(err, "Failed to load file.")
+        local func, err
+        local s, e = pcall(function ()
+            func, err = load(path, path)
+        end)
+        if not func or not s then
+            print(err.."Failed to load file.")
             return
         end
         func()
     else
-        local func, err = loadfile(path, "t", env)
-        if not func then
-            log.fatal(err, "Failed to load file.")
+        local func, err
+        local s, e = pcall(function ()
+            func, err = loadfile(path, "t", env)
+        end)
+        if not func or not s then
+            print(err.."Failed to load file.")
             return
         end
         func()
+    end
+end
+
+bios.debug = debug
+bios.native.nativeRun = os.run
+
+function bios.loadfile(path, _env, _metatable)
+    local env = setmetatable(_env, _metatable)
+    if setfenv then
+        local func, err
+        local s, e = pcall(function ()
+            func, err = loadfile(path)
+        end)
+        if not func or func == nil then
+            return nil, err
+        end
+        setfenv(func, env)
+        return func, err
+    elseif _VERSION == "Lua 5.2" then
+        _ENV = env
+        local func, err
+        local s, e = pcall(function ()
+            func, err = loadfile(path, "t", env)
+        end)
+        return func, err
+    else
+        local func, err
+        local s, e = pcall(function ()
+            func, err = loadfile(path, "t", env)
+        end)
+        return func, err
     end
 end
 

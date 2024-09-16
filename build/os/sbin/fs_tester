@@ -1,0 +1,3 @@
+local text = kernel.fs.open("/test", "w+")
+text.write("aaa")
+text.close()

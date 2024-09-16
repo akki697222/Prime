@@ -31,5 +31,8 @@
         "write",
         "read",
         "sleep"
+    ],
+    "Lua.workspace.library": [
+        "bios/global"
     ]
 }

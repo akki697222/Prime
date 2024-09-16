@@ -20,6 +20,8 @@ function graphics.colorWrite(...)
     end
 end
 
+--- &x (16bit color code) to change color. (Special codes: &r(Reset colors to default))
+--- example: graphics.colorPrint("&eRed Color&0")
 function graphics.colorPrint(...)
     local i = 1
     while i <= #... do
@@ -54,6 +56,31 @@ function graphics.setPosition(x, y)
     term.setCursorPos(x, y)
 end
 
+function graphics.setTextColor(color)
+    term.setTextColor(color)
+end
+
+function graphics.setBackgroundColor(color)
+    term.setBackgroundColor(color)
+end
+
+function graphics.setPaletteColor(color, code)
+    term.setPaletteColor(color, code)
+end
+
+function graphics.clear()
+    term.clear()
+end
+
+function graphics.reset()
+    term.clear()
+    term.setCursorPos(1,1)
+    term.setTextColor(colors.white)
+    term.setBackgroundColor(colors.black)
+end
+
+---@return number cursorX, number cursorY 
+---Same as term.getCursorPos()
 function graphics.getPosition()
     return term.getCursorPos()
 end

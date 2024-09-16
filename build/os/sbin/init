@@ -1,0 +1,29 @@
+if kernel == nil and type(printf) ~= "function" then error("Not Prime") return end
+
+local function status(message, status)
+    if status == nil then 
+        write("          ")
+    elseif status then 
+        monitor.colorWrite("[  &5OK&0  ]  ")
+    else 
+        monitor.colorWrite("[ &eFAIL&0 ]  ")
+    end
+    printf(message)
+    return status
+end
+
+monitor.colorPrint("Welcome to "..kernel.name.."!")
+
+status("initstatus nil")
+status("initstatus true", true)
+status("initstatus false", false)
+
+kernel.exec("/bin/ps", _ENV, 1)
+kernel.exec("/bin/ps", _ENV, 1)
+kernel.exec("/bin/ps", _ENV, 1)
+
+local file = kernel.fs.open("/tmp/akki.txt", "w")
+if file ~= nil then
+    file.write("eat akki")
+    file.close()
+end

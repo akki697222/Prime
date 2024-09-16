@@ -1,4 +1,4 @@
-local graphics = require("bios.graphics")
+local graphics = require("/bios/graphics")
 local log = {}
 
 local write = graphics.colorPrint
@@ -25,6 +25,10 @@ end
 
 function log.fatal(error, ...)
     write(os.clock().." &e[FATAL]&0 ".. error .. "\n" .. ...)
+end
+
+function log.crit(...)
+    write(os.clock().." &4[CRITICAL]&0 ".. ...)
 end
 
 return log
