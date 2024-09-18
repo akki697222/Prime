@@ -3,9 +3,9 @@
 
 Copyright (c) 2024 akki697222 \- MIT License
 # TODO
-- プロセス管理について学び、カーネルに実装する
+- プロセス管理について学び、カーネルに実装する <- WIP
 - [これ](https://0xax.gitbooks.io/linux-insides/content/index.html)を見てもっとlinuxについて知る(https://keichi.dev/post/linux-boot/ より)
-- initの実装について調べ、よさそうなのを実装する
+- initの実装について調べ、よさそうなのを実装する <- systemd
 - ユーザーモジュールと権限のシステムを作成する
 
 (終わったやつは~~このように~~線を引いておく)

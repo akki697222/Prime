@@ -1,7 +1,5 @@
-partition.mount("primeos")
-
 local entries = {
-    ["PrimeOS"] = partition.directories.mount .. partition.getMountedPartitionData("primeos").path .. "/boot/kernel.lua",
+    ["PrimeOS"] = partition.directories.disk .. partition.getPartitionData("primeos").path .. "/boot/boot.lua",
     ["Exit"] = "exit",
 }
 local function drawEntry()

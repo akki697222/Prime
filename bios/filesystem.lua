@@ -85,11 +85,20 @@ function filesystem.create(mode, name)
     filehandler.combine = function (basepath, localpath)
         return fs.combine(basepath, localpath)
     end
+    filehandler.rootCombine = function (basepath, localpath)
+        return fs.combine(root, fs.combine(basepath, localpath))
+    end
     filehandler.list = function (path)
         return fs.list(fs.combine(root, path))
     end
     filehandler.delete = function (path)
         fs.delete(fs.combine(root, path))
+    end
+    filehandler.find = function (path)
+        return fs.find(fs.combine(root, path))
+    end
+    filehandler.isDir = function (path)
+        return fs.isDir(fs.combine(root, path))
     end
     return filehandler
 end

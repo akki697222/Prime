@@ -21,6 +21,7 @@ status("initstatus false", false)
 kernel.exec("/bin/ps", _ENV, 1)
 kernel.exec("/bin/ps", _ENV, 1)
 kernel.exec("/bin/ps", _ENV, 1)
+kernel.exec("/bin/ls", _ENV, 1)
 
 local file = kernel.fs.open("/tmp/akki.txt", "w")
 if file ~= nil then

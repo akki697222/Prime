@@ -204,6 +204,20 @@ function part.unmount(name)
     end
 end
 
+---@alias OpenMode
+---| '"part"' # Partition
+---| '"mount"' # Mounted Partition
+--- if mode is nil, mode is part mode.
+---@param mode OpenMode
+---@param drive string Name of Partition|Mounted Partition
+function part.exists(drive, mode)
+    if mode == "part" or not mode or mode == "" then
+        return checkPartitionExists(drive)
+    elseif mode == "mount" then
+        return checkMountExists(mode)
+    end
+end
+
 ---Creates Partition
 ---@param name string
 ---@param path string

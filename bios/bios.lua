@@ -70,7 +70,7 @@ end
 function bios.execute(path)
     local func, err = loadfile(path)
     if not func then
-        print(err.."Failed to load file.")
+        print("Failed to load file: "..err)
         return
     end
     local computer = require(requires.computer)

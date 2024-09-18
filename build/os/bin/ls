@@ -5,8 +5,22 @@ if not args[1] then
     args[1] = "/"
 end
 local list = kernel.fs.list(args[1])
+local dir = {}
+local file = {}
 if list then
     for index, value in ipairs(list) do
-        printf(value)
+        if kernel.fs.isDir(value) then
+            table.insert(dir, value)
+        else
+            table.insert(file, value)
+        end
     end
+end
+for index, value in ipairs(dir) do
+    monitor.setTextColor(colors.blue)
+    printf(value)
+    monitor.setTextColor(colors.white)
+end
+for index, value in ipairs(file) do
+    printf(value)
 end
