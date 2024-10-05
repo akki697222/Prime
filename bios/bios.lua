@@ -110,6 +110,7 @@ function bios.execute(path)
         colors = colors,
         coroutine = coroutine,
         math = math,
+        string = string,
 
         printf = print,
         write = io.write,

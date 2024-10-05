@@ -1,6 +1,8 @@
-if kernel == nil and type(printf) ~= "function" then error("Not Prime") return end
+if type(printf) ~= "function" then error("Not Prime") return end
+local process = require("system.process")
+local printOutput = require("system.util.printOutput")
 local printtable = {{"USER", "PID", "STAT", "COMMAND"}}
-for index, value in ipairs(kernel.process) do
+for index, value in ipairs(process.get()) do
     table.insert(printtable, {value.user, value.PID, coroutine.status(value.thread), value.path})
 end
-kernel.printOutput(printtable)
+printOutput(printtable)

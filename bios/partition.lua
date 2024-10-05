@@ -224,7 +224,7 @@ end
 ---Creates Partition
 ---@param name string
 ---@param path string
----@param readonly boolean
+---@param readonly ?boolean
 function part.create(name, path, readonly)
     if readonly == nil then
         readonly = false

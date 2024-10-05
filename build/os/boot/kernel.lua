@@ -16,7 +16,7 @@ local permissiondata = {}
 kernel.mode = {
     debug = true,
 }
-kernel.ver = "0.1.0-0.craftos"
+kernel.ver = "0.1.1-0.craftos"
 kernel.name = "Prime version "..kernel.ver
 
 kernel.partition = {
@@ -480,14 +480,6 @@ function kernel.init()
     user.init()
     
     --Setting Env
-    _ENV.kernel = kernel
-    _ENV.eventsystem = eventsystem
-    _ENV._panic = panic
-    _ENV.user = user
-    _ENV.userfs = userfs
-    _ENV.permission = fperm
-    _ENV.timeapi = timeapi
-
     kernel.env = {
         table = table,
         textutils = textutils,
@@ -504,6 +496,44 @@ function kernel.init()
         read = read,
         pcall = pcall,
         xpcall = xpcall,
+        require = function (...)
+            if not ... then
+                return nil
+            end
+            local modules = {
+                system = {
+                    user = user,
+                    permission = fperm,
+                    system = {
+                        ver = kernel.ver,
+                        name = kernel.name,
+                        root = kernel.partition.root
+                    },
+                    filesystem = kernel.fs,
+                    process = {
+                        fork = kernel.fork,
+                        exec = kernel.exec,
+                        get = kernel.getProcess,
+                        kill = kernel.killProcess,
+                    },
+                    util = {
+                        date = timeapi,
+                        printOutput = kernel.printOutput,
+                        colorWrite = monitor.colorWrite,
+                        colorPrint = monitor.colorPrint
+                    },
+                }
+            }
+            local res = modules
+            for part in string.gmatch(..., "[^.]+") do
+                if res[part] then
+                    res = res[part]
+                else
+                    error("Module '".. ... .. "' is not found.")
+                end
+            end
+            return res
+        end
     }
 end
 
@@ -521,7 +551,7 @@ end
 
 function kernel.exec(path, env, priority, pid, usr, arguments)
     if env == nil then
-        env = _ENV
+        env = kernel.env
     end
     if priority == nil then
         priority = 3
@@ -616,7 +646,7 @@ end
 
 kernel.init()
 
-kernel.exec("/sbin/init", _ENV, 0, 1)
+kernel.exec("/sbin/init", kernel.env, 0, 1)
 --Kernel Main Loop
 while kernel.running do 
     local e = {bios.pullEvent()}

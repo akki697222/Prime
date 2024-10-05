@@ -1,37 +1,42 @@
-if kernel == nil and type(printf) ~= "function" then error("Not Prime") return end
+if type(printf) ~= "function" then error("Not Prime") return end
+
+local process = require("system.process")
+local fs = require("system.filesystem")
+local system = require("system.system")
+local colorWrite = require("system.util.colorWrite")
 
 local initver = "0.1.0"
 local function status(message, status)
     if status == nil then 
         write("          ")
     elseif status then 
-        monitor.colorWrite("[  &5OK&0  ]  ")
+        colorWrite("[  &5OK&0  ]  ")
     else 
-        monitor.colorWrite("[ &eFAIL&0 ]  ")
+        colorWrite("[ &eFAIL&0 ]  ")
     end
     printf(message)
     return status
 end
 
-printf("\n  PrimeInit "..initver.." on "..kernel.name.."!\n")
+printf("\n  PrimeInit "..initver.." on "..system.name.."!\n")
 
 status("initstatus nil")
 status("initstatus true", true)
 status("initstatus false", false)
 
-kernel.exec("/usr/bin/ps", _ENV, 1)
-kernel.exec("/usr/bin/ps", _ENV, 1)
-kernel.exec("/usr/bin/ps", _ENV, 1)
-kernel.exec("/usr/bin/ls", _ENV, 10)
+process.exec("/usr/bin/ps", _ENV, 1)
+process.exec("/usr/bin/ps", _ENV, 1)
+process.exec("/usr/bin/ps", _ENV, 1)
+process.exec("/usr/bin/ls", _ENV, 10)
 
 printf("User Filesystem Read/Write/Delete Test")
-local file = userfs.open("/tmp/akki.txt", "w")
+local file = fs.open("/tmp/akki.txt", "w")
 if file ~= nil then
     file.write("akki wo kue")
     file.close()
 end
-kernel.exec("/usr/bin/ls", _ENV, 0, nil, nil, {"/tmp"})
-local file = userfs.open("/tmp/akki.txt", "w")
+process.exec("/usr/bin/ls", _ENV, 0, nil, nil, {"/tmp"})
+local file = fs.open("/tmp/akki.txt", "w")
 if file ~= nil then
     file.write("akki wo kue2")
     file.close()
