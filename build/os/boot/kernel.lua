@@ -525,10 +525,19 @@ function kernel.init()
                 }
             }
             local res = modules
+            local normal = false
             for part in string.gmatch(..., "[^.]+") do
                 if res[part] then
                     res = res[part]
                 else
+                    normal = true
+                end
+            end
+            if normal then
+                local s, e = pcall(function (...)
+                    res = require(...)
+                end, ...)
+                if not s then
                     error("Module '".. ... .. "' is not found.")
                 end
             end
