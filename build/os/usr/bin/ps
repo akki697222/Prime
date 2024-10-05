@@ -1,0 +1,6 @@
+if kernel == nil and type(printf) ~= "function" then error("Not Prime") return end
+local printtable = {{"USER", "PID", "STAT", "COMMAND"}}
+for index, value in ipairs(kernel.process) do
+    table.insert(printtable, {value.user, value.PID, coroutine.status(value.thread), value.path})
+end
+kernel.printOutput(printtable)

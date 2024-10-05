@@ -13,7 +13,7 @@ partition.init()
 partition.delete(temp_partition_name)
 partition.delete(temp_bootsector_name)
 
-partition.create(temp_partition_name, temp_partition_name)
+partition.create(temp_partition_name, temp_partition_name, false)
 partition.create(temp_bootsector_name, temp_bootsector_name, true)
 
 local boot = fs_advanced.create("part", temp_bootsector_name)

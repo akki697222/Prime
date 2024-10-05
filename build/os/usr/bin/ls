@@ -1,0 +1,74 @@
+local args = {...}
+if kernel == nil and type(printf) ~= "function" then error("Not Prime") return end
+
+if not args[1] then
+    args[1] = "/"
+end
+local list = kernel.fs.list(args[1])
+local dir = {}
+local file = {}
+local simple = false
+if list then
+    for index, value in ipairs(list) do
+        if kernel.fs.isDir(kernel.fs.combine(args[1], value.name)) then
+            table.insert(dir, value)
+        else
+            table.insert(file, value)
+        end
+    end
+end
+local perm_table = permission.getPermissionTable(args[1])
+local print_table = {}
+if simple then
+    print_table = {{}}
+    for index, value in ipairs(dir) do
+        table.insert(print_table[1], value.name)
+    end
+    for index, value in ipairs(file) do
+        table.insert(print_table[1], value.name)
+    end
+else
+    for index, value in ipairs(dir) do
+        if perm_table ~= nil then
+            if perm_table[value.name] ~= nil then
+                local localdata = perm_table[value.name]
+                local dates = "Unknown"
+                if tonumber(timeapi.date("%Y", localdata.timestamp.mtime / 1000 or 0)) == tonumber(timeapi.date("%Y")) then
+                    dates = tostring(timeapi.date("%b %d %R", localdata.timestamp.mtime / 1000 or 0) or "Unknown")
+                else
+                    dates = tostring(timeapi.date("%b %d %Y", localdata.timestamp.mtime / 1000 or 0) or "Unknown")
+                end
+                table.insert(print_table, {
+                    "d"..localdata.permission,
+                    user.getData(localdata.owner).name,
+                    user.group.getData(localdata.group).name,
+                    localdata.size,
+                    dates,
+                    value.name or "Unknown Folder",
+                })
+            end
+        end
+    end
+    for index, value in ipairs(file) do
+        if perm_table ~= nil then
+            if perm_table[value.name] ~= nil then
+                local localdata = perm_table[value.name]
+                local dates = "Unknown"
+                if tonumber(timeapi.date("%Y", localdata.timestamp.mtime / 1000 or 0)) == tonumber(timeapi.date("%Y")) then
+                    dates = tostring(timeapi.date("%b %d %R", localdata.timestamp.mtime / 1000 or 0) or "Unknown")
+                else
+                    dates = tostring(timeapi.date("%b %d %Y", localdata.timestamp.mtime / 1000 or 0) or "Unknown")
+                end
+                table.insert(print_table, {
+                    "-"..localdata.permission,
+                    user.getData(localdata.owner).name,
+                    user.group.getData(localdata.group).name,
+                    localdata.size,
+                    dates,
+                    value.name or "Unknown File",
+                })
+            end
+        end
+    end
+end
+kernel.printOutput(print_table)

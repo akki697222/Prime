@@ -174,6 +174,9 @@ function part.mount(name)
     else
         local partition, partitionIndex = getPartition(name)
         local fullpath = mounted_disk_data..partition.path
+        if fs.exists(fullpath) then
+            fs.delete(fullpath)
+        end
         fs.makeDir(fullpath)
         fs.copy(disk_data..partition.path, fullpath)
         addMountToInfo(name, partition.path)

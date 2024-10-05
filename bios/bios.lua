@@ -9,8 +9,10 @@ local requires = {
     io = "bios.io",
 }
 local part = require("bios.partition")
+local w, h = term.getSize()
 local bios = {native = {
-    term = term
+    term = term,
+    fs = fs,
 }}
 
 function bios.init()
@@ -22,23 +24,32 @@ function bios.uptime()
 end
 
 function bios.post()
+    term.setCursorPos(1, 1)
+    print("Prime BIOS (version 0.1.0)")
+    term.setCursorPos(1, h)
+    print("(Warning) This is a work-in-progress alpha version. It has many bugs and issues.")
+    term.setCursorPos(1, 3)
     local function checkGlobal()
         if not shell or not term or not fs then return false end
         return true
     end
     if not checkGlobal() then
-        print("This program can only be run on CC: Tweaked", 0)
+        error("This program can only be run on CC: Tweaked", 0)
     else
         term.setCursorBlink(true)
     end
     print("Booting from Storage...")
-    bios.execute(part.directories.disk .. "bootsector/bootloader.lua")
+    if not fs.exists(part.directories.disk .. "bootsector/bootloader.lua") then
+        print("Failed to boot: bootsector is not exists.")
+    else
+        local s, e = bios.execute(part.directories.disk .. "bootsector/bootloader.lua")
+    end
 end
 
 function bios.run()
     term.clear()
     term.setCursorPos(1, 1)
-    print("Prime BIOS (version 0.0.1-0.craftos)\n")
+    term.setTextColor(colors.white)
     bios.init()
     bios.post()
 end
@@ -53,6 +64,14 @@ end
 
 function bios.pullEventRaw(filter)
     return os.pullEventRaw(filter)
+end
+
+function bios.date(format, time)
+    return os.date(format, time)
+end
+
+function bios.epoch(args)
+    return os.epoch(args)
 end
 
 function bios.queueEvent(event, ...)
@@ -70,8 +89,7 @@ end
 function bios.execute(path)
     local func, err = loadfile(path)
     if not func then
-        print("Failed to load file: "..err)
-        return
+        return false, err
     end
     local computer = require(requires.computer)
     local device = require(requires.device)
@@ -91,6 +109,7 @@ function bios.execute(path)
         textutils = textutils,
         colors = colors,
         coroutine = coroutine,
+        math = math,
 
         printf = print,
         write = io.write,
@@ -112,20 +131,28 @@ function bios.execute(path)
             func, err = load(path, path)
         end)
         if not func or not s then
-            print(err.."Failed to load file.")
-            return
+            return false, err
         end
-        func()
+        local s, e = pcall(function ()
+            func()
+        end)
+        if not s then
+            return false, e
+        end
     else
         local func, err
         local s, e = pcall(function ()
             func, err = loadfile(path, "t", env)
         end)
         if not func or not s then
-            print(err.."Failed to load file.")
-            return
+            return false, err
         end
-        func()
+        local s, e = pcall(function ()
+            func()
+        end)
+        if not s then
+            return false, e
+        end
     end
 end
 

@@ -1,5 +1,6 @@
 if kernel == nil and type(printf) ~= "function" then error("Not Prime") return end
 
+local initver = "0.1.0"
 local function status(message, status)
     if status == nil then 
         write("          ")
@@ -12,19 +13,27 @@ local function status(message, status)
     return status
 end
 
-monitor.colorPrint("Welcome to "..kernel.name.."!")
+printf("\n  PrimeInit "..initver.." on "..kernel.name.."!\n")
 
 status("initstatus nil")
 status("initstatus true", true)
 status("initstatus false", false)
 
-kernel.exec("/bin/ps", _ENV, 1)
-kernel.exec("/bin/ps", _ENV, 1)
-kernel.exec("/bin/ps", _ENV, 1)
-kernel.exec("/bin/ls", _ENV, 1)
+kernel.exec("/usr/bin/ps", _ENV, 1)
+kernel.exec("/usr/bin/ps", _ENV, 1)
+kernel.exec("/usr/bin/ps", _ENV, 1)
+kernel.exec("/usr/bin/ls", _ENV, 10)
 
-local file = kernel.fs.open("/tmp/akki.txt", "w")
+printf("User Filesystem Read/Write/Delete Test")
+local file = userfs.open("/tmp/akki.txt", "w")
 if file ~= nil then
-    file.write("eat akki")
+    file.write("akki wo kue")
     file.close()
 end
+kernel.exec("/usr/bin/ls", _ENV, 0, nil, nil, {"/tmp"})
+local file = userfs.open("/tmp/akki.txt", "w")
+if file ~= nil then
+    file.write("akki wo kue2")
+    file.close()
+end
+--userfs.delete("/tmp/akki.txt")
