@@ -1,6 +1,0 @@
-local text = kernel.fs.open("test.txt", "w+")
-text.write("aaa")
-text.close()
-local text = userfs.open("test.txt", "w+")
-text.write("aaa userfs")
-text.close()

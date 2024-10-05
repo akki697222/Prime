@@ -3,16 +3,17 @@ if type(printf) ~= "function" then error("Not Prime") return end
 local process = require("system.process")
 local fs = require("system.filesystem")
 local system = require("system.system")
-local colorWrite = require("system.util.colorWrite")
+local user = require("system.user")
+local printutils = require("system.util.print")
 
 local initver = "0.1.0"
 local function status(message, status)
     if status == nil then 
         write("          ")
     elseif status then 
-        colorWrite("[  &5OK&0  ]  ")
+        printutils.colorWrite("[  &5OK&0  ]  ")
     else 
-        colorWrite("[ &eFAIL&0 ]  ")
+        printutils.colorWrite("[ &eFAIL&0 ]  ")
     end
     printf(message)
     return status
@@ -24,10 +25,13 @@ status("initstatus nil")
 status("initstatus true", true)
 status("initstatus false", false)
 
+user.setCurrent(1)
+
 process.exec("/usr/bin/ps", _ENV, 1)
-process.exec("/usr/bin/ps", _ENV, 1)
-process.exec("/usr/bin/ps", _ENV, 1)
+process.exec("/usr/bin/ls", _ENV, 1, nil, nil, {"boot"})
+process.exec("/usr/bin/ls", _ENV, 1, nil, nil, {"tmp"})
 process.exec("/usr/bin/ls", _ENV, 10)
+process.exec("/usr/bin/cat", _ENV, 5, nil, nil, {"/usr/bin/ls"})
 
 printf("User Filesystem Read/Write/Delete Test")
 local file = fs.open("/tmp/akki.txt", "w")

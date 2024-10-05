@@ -4,12 +4,14 @@ local user = require("system.user")
 local fs = require("system.filesystem")
 local date = require("system.util.date")
 local permission = require("system.permission")
-local printOutput = require("system.util.printOutput")
+local printutils = require("system.util.print")
+
+local listIgnores = {".meta"}
 
 if not args[1] then
     args[1] = "/"
 end
-local list = fs.list(args[1])
+local list = fs.list(fs.combine("/", args[1]))
 local dir = {}
 local file = {}
 local simple = false
@@ -64,16 +66,24 @@ else
                 else
                     dates = tostring(date.date("%b %d %Y", localdata.timestamp.mtime / 1000 or 0) or "Unknown")
                 end
-                table.insert(print_table, {
-                    "-"..localdata.permission,
-                    user.getData(localdata.owner).name,
-                    user.group.getData(localdata.group).name,
-                    localdata.size,
-                    dates,
-                    value.name or "Unknown File",
-                })
+                local bad = false
+                for i, v in ipairs(listIgnores) do
+                    if value.name == v then
+                        bad = true
+                    end
+                end
+                if not bad then
+                    table.insert(print_table, {
+                        "d"..localdata.permission,
+                        user.getData(localdata.owner).name,
+                        user.group.getData(localdata.group).name,
+                        localdata.size,
+                        dates,
+                        value.name or "Unknown Folder",
+                    })
+                end
             end
         end
     end
 end
-printOutput(print_table)
+printutils.printOutput(print_table)

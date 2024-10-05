@@ -1,4 +1,3 @@
-local _debug_mode = false
 local s, e = xpcall(function ()
 
 local function checkModules()
@@ -28,6 +27,13 @@ kernel.process = {}
 kernel.eventhandlers = {}
 kernel.user = {}
 
+local timeapi = {}
+local eventsystem = {}
+local user = {group = {}}
+local user_data = {user = {}, group = {}}
+local userfs = {}
+local fperm = {}
+
 ---What happened!? ... Yes, the kernel seems to have crashed...
 function panic(message, errors)
     if errors == nil then
@@ -41,7 +47,6 @@ function panic(message, errors)
 end
 
 --EventSystem API
-local eventsystem = {}
 
 function eventsystem.push(event, ...)
     bios.queueEvent(event, ...)
@@ -65,8 +70,6 @@ function eventsystem.addEventHandler(func)
 end
 
 -- User API
-local user = {group = {}}
-local user_data = {user = {}, group = {}}
 
 function user.init()
     if not kernel.fs.exists("/etc/passwd") then
@@ -129,7 +132,7 @@ function user.group.getIndex(gid)
 end
 
 function user.create(name, password, gid, uid)
-    local uid = uid or table.maxn(user_data) + 1
+    local uid = uid or table.maxn(user_data.user) + 1
     table.insert(user_data.user, {name = name, id = uid, uid = uid, gid = gid or 100, passwd = password or ""})
     user.save()
     return uid
@@ -150,8 +153,14 @@ function user.delete(uid)
     end
 end
 
-function user.group.create(name)
-    
+---@param name string
+---@param gid number
+---@param permission string #rwxrwxrwx
+function user.group.create(name, gid, permission)
+    local gid = gid or table.maxn(user_data.group) + 1
+    table.insert(user_data.group, {name = name, id = gid, permission = permission, gid = gid})
+    user.save()
+    return gid
 end
 
 function user.group.delete(gid)
@@ -176,11 +185,9 @@ function user.exists(uid)
 end
 
 -- User Filesystem API
-local userfs = {}
-local fperm = {}
 
 function userfs.open(path, mode)
-    local perm_table = permission.getPermissionTable(kernel.fs.getDir(path))
+    local perm_table = fperm.getPermissionTable(kernel.fs.getDir(path))
     if perm_table == nil or perm_table == {} then
         printf("UFS: &eDirectory Metadata is empty.&0")
         return nil
@@ -208,7 +215,7 @@ function userfs.open(path, mode)
 end
 
 function userfs.delete(path)
-    local perm_table = permission.getPermissionTable(kernel.fs.getDir(path))
+    local perm_table = fperm.getPermissionTable(kernel.fs.getDir(path))
     if perm_table == nil or perm_table == {} then
         printf("UFS: &eDirectory Metadata is empty.&0")
         return
@@ -240,7 +247,19 @@ function userfs.delete(path)
 end
 
 function userfs.list(path)
-    
+    return kernel.fs.list(path)
+end
+
+function userfs.combine(basepath, localpath)
+    return kernel.fs.combine(basepath, localpath)
+end
+
+function userfs.exists(path)
+    return kernel.fs.exists(path)
+end
+
+function userfs.isDir(path)
+    return kernel.fs.isDir(path)
 end
 
 -- Application Utility
@@ -386,18 +405,18 @@ function fperm.parseDigit(permission)
     return res
 end
 
+local permissions = {
+    [7] = "rwx",
+    [6] = "rw-",
+    [5] = "r-x",
+    [4] = "r--",
+    [3] = "-wx",
+    [2] = "-w-",
+    [1] = "--x",
+    [0] = "---"
+}
+
 function fperm.parseSingleString(permission)
-    local permissions = {
-        [7] = "rwx",
-        [6] = "rw-",
-        [5] = "r-x",
-        [4] = "r--",
-        [3] = "-wx",
-        [2] = "-w-",
-        [1] = "--x",
-        [0] = "---"
-    }
-    
     return permissions[permission]
 end
 
@@ -405,17 +424,6 @@ function fperm.parseString(permission)
     if permission < 0 or permission > 777 then
         return nil
     end
-
-    local permissions = {
-        [7] = "rwx",
-        [6] = "rw-",
-        [5] = "r-x",
-        [4] = "r--",
-        [3] = "-wx",
-        [2] = "-w-",
-        [1] = "--x",
-        [0] = "---"
-    }
 
     local result = ""
     
@@ -441,7 +449,6 @@ function fperm.setPermissionTable(path, file, permission)
 end
 
 -- Time API
-local timeapi = {}
 
 function timeapi.epoch(args)
     return bios.epoch(args)
@@ -500,6 +507,7 @@ function kernel.init()
             if not ... then
                 return nil
             end
+            ---@class primeDefaultEnv
             local modules = {
                 system = {
                     user = user,
@@ -509,7 +517,7 @@ function kernel.init()
                         name = kernel.name,
                         root = kernel.partition.root
                     },
-                    filesystem = kernel.fs,
+                    filesystem = userfs,
                     process = {
                         fork = kernel.fork,
                         exec = kernel.exec,
@@ -518,9 +526,11 @@ function kernel.init()
                     },
                     util = {
                         date = timeapi,
-                        printOutput = kernel.printOutput,
-                        colorWrite = monitor.colorWrite,
-                        colorPrint = monitor.colorPrint
+                        print = {
+                            printOutput = kernel.printOutput,
+                            colorWrite = monitor.colorWrite,
+                            colorPrint = monitor.colorPrint,
+                        }
                     },
                 }
             }
@@ -534,11 +544,22 @@ function kernel.init()
                 end
             end
             if normal then
-                local s, e = pcall(function (...)
-                    res = require(...)
-                end, ...)
-                if not s then
-                    error("Module '".. ... .. "' is not found.")
+                local localpath = kernel.fs.getLocalPath()
+                local a = localpath .. "/" .. string.gsub(..., "%.", "/")
+                printf(a)
+                res = bios.native.loadfile(a, "t", kernel.env)
+                if not res then
+                    res = bios.native.loadfile(localpath .. "/" .. a, "t", kernel.env)
+                end
+                if not res then
+                    printf("Module '" .. ... .. "' is not found")
+                else
+                    if _VERSION == "Lua 5.1" then
+                        setfenv(res, kernel.env)
+                    else
+                        
+                    end
+                    return res()
                 end
             end
             return res

@@ -13,6 +13,9 @@ local w, h = term.getSize()
 local bios = {native = {
     term = term,
     fs = fs,
+    require = require,
+    dofile = dofile,
+    loadfile = loadfile,
 }}
 
 function bios.init()
@@ -111,6 +114,7 @@ function bios.execute(path)
         coroutine = coroutine,
         math = math,
         string = string,
+        package = package,
 
         printf = print,
         write = io.write,
