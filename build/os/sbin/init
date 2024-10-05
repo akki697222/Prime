@@ -31,7 +31,8 @@ process.exec("/usr/bin/ps", _ENV, 1)
 process.exec("/usr/bin/ls", _ENV, 1, nil, nil, {"boot"})
 process.exec("/usr/bin/ls", _ENV, 1, nil, nil, {"tmp"})
 process.exec("/usr/bin/ls", _ENV, 10)
-process.exec("/usr/bin/cat", _ENV, 5, nil, nil, {"/usr/bin/ls"})
+
+process.exec("/usr/bin/ls", _ENV, 10,nil,nil,{"/no/such/file/or/directory"})
 
 printf("User Filesystem Read/Write/Delete Test")
 local file = fs.open("/tmp/akki.txt", "w")
@@ -45,4 +46,5 @@ if file ~= nil then
     file.write("akki wo kue2")
     file.close()
 end
---userfs.delete("/tmp/akki.txt")
+
+process.exec("/usr/bin/cat", _ENV, 5, nil, nil, {"/tmp/akki.txt"})

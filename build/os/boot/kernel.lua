@@ -10,7 +10,6 @@ local function checkModules()
 end
 
 local kernel = {}
-local permissiondata = {}
 --Kernel Globals
 kernel.mode = {
     debug = true,
@@ -158,13 +157,22 @@ end
 ---@param permission string #rwxrwxrwx
 function user.group.create(name, gid, permission)
     local gid = gid or table.maxn(user_data.group) + 1
-    table.insert(user_data.group, {name = name, id = gid, permission = permission, gid = gid})
+    table.insert(user_data.group, {name = name, id = gid, permission = permission or "rwxr-xr-x", gid = gid})
     user.save()
     return gid
 end
 
 function user.group.delete(gid)
-    
+    if gid == 0 then
+        monitor.colorPrint("&eUser Module: Cannot delete the root group.&0")
+        return nil
+    end
+    local idx = user.group.getIndex(gid)
+    if idx ~= nil then
+        return table.remove(user_data.group, idx)
+    else
+        monitor.colorPrint("&eUser Module: Group not found. (GID "..gid..")&0")
+    end
 end
 
 function user.setCurrent(uid)
@@ -189,26 +197,24 @@ end
 function userfs.open(path, mode)
     local perm_table = fperm.getPermissionTable(kernel.fs.getDir(path))
     if perm_table == nil or perm_table == {} then
-        printf("UFS: &eDirectory Metadata is empty.&0")
+        kernel.log("Filesystem", "Error: Directory Metadata not found. (in directory "..kernel.fs.getDir(path)..")")
         return nil
     end
     if kernel.fs.getFile(path) == ".meta" then
-        monitor.colorPrint("UFS: &eCannot edit the meta file.&0")
         return nil
     end
     if kernel.fs.exists(path) then
         if perm_table[kernel.fs.getFile(path)] ~= nil then
-            perm_table[kernel.fs.getFile(path)].timestamp.mtime = timeapi.epoch("local")
+            perm_table[kernel.fs.getFile(path)].timestamp.mtime = timeapi.epoch("local") / 1000
         end
     elseif mode == "w" or mode == "w+" or mode == "r+" then
         if perm_table[kernel.fs.getFile(path)] ~= nil then
-            perm_table[kernel.fs.getFile(path)].timestamp.mtime = timeapi.epoch("local")
+            perm_table[kernel.fs.getFile(path)].timestamp.mtime = timeapi.epoch("local") / 1000
         else
             perm_table[kernel.fs.getFile(path)] = fperm.generateMetatable("rwxr--r--", false)
         end
         fperm.update(kernel.fs.getDir(path), perm_table)
     else
-        monitor.colorPrint("UFS: &eFile not found.&0")
         return nil 
     end
     return kernel.fs.open(path, mode)
@@ -284,8 +290,8 @@ function fperm.generateMetatable(permission, isDir, owner, group)
         isDir = isDir, 
         size = 0, 
         timestamp = {
-            btime = timeapi.epoch("local"), 
-            mtime = timeapi.epoch("local")
+            btime = timeapi.epoch("local") / 1000, 
+            mtime = timeapi.epoch("local") / 1000
         }
     }
 end
