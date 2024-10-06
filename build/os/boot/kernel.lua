@@ -26,12 +26,21 @@ kernel.process = {}
 kernel.eventhandlers = {}
 kernel.user = {}
 
+---@class date
 local timeapi = {}
+---@class eventsystem
 local eventsystem = {}
 local user = {group = {}}
 local user_data = {user = {}, group = {}}
 local userfs = {}
 local fperm = {}
+local errors = {
+    [-1] = true,
+    [0] = "Permission Denied.",
+    [1] = "File not found.",
+    [2] = "No such file or directory."
+}
+local peripheral = {}
 
 ---What happened!? ... Yes, the kernel seems to have crashed...
 function panic(message, errors)
@@ -223,32 +232,31 @@ end
 function userfs.delete(path)
     local perm_table = fperm.getPermissionTable(kernel.fs.getDir(path))
     if perm_table == nil or perm_table == {} then
-        printf("UFS: &eDirectory Metadata is empty.&0")
+        kernel.log("Filesystem", "Error: Directory Metadata not found. (in directory "..kernel.fs.getDir(path)..")")
         return
     end
     if kernel.fs.exists(path) then
         if kernel.fs.getFile(path) == ".meta" then
-            monitor.colorPrint("UFS: &eCannot edit the meta file.&0")
-            return
+            return 0
         end
         if perm_table[kernel.fs.getFile(path)] ~= nil then
             if perm_table[kernel.fs.getFile(path)].owner == kernel.user then
-                
+                kernel.fs.delete(path)
+                return true
             elseif perm_table[kernel.fs.getFile(path)].group == user.getData(kernel.user).gid then
-
+                kernel.fs.delete(path)
+                return true
             elseif fperm.isGroupHasPermission(user.getData(kernel.user).gid, "rw-", "other") then
-
+                kernel.fs.delete(path)
+                return true
             else
-                printf("Permission Denied")
-                return
+                return 0
             end
             printf(fperm.isGroupHasPermission(user.getData(kernel.user).gid, "rw-", "group"))
             perm_table[kernel.fs.getFile(path)] = nil
             fperm.update(kernel.fs.getDir(path), perm_table)
         end
-        kernel.fs.delete(path)
-    else
-        monitor.colorPrint("UFS: &eFile not found.&0")
+        return 2
     end
 end
 
@@ -266,19 +274,6 @@ end
 
 function userfs.isDir(path)
     return kernel.fs.isDir(path)
-end
-
--- Application Utility
-local libapplication = {}
-
-function libapplication.getOption(raw_arguments, index)
-    for index, value in ipairs(raw_arguments) do
-        
-    end
-end
-
-function libapplication.readInput()
-    
 end
 
 -- File permission API
@@ -513,16 +508,20 @@ function kernel.init()
             if not ... then
                 return nil
             end
+            local lp = kernel.fs.getLocalPath()
+            package.path = lp.."/?;"..lp.."/usr/lib/?;"..lp.."/?.lua;"..lp.."/usr/lib/?.lua;"
             ---@class primeDefaultEnv
             local modules = {
                 system = {
                     user = user,
                     permission = fperm,
+                    monitor = monitor,
                     system = {
                         ver = kernel.ver,
                         name = kernel.name,
                         root = kernel.partition.root
                     },
+                    event = eventsystem,
                     filesystem = userfs,
                     process = {
                         fork = kernel.fork,
@@ -532,11 +531,15 @@ function kernel.init()
                     },
                     util = {
                         date = timeapi,
+                        argparse = bios.native.require("argparse"),
                         print = {
                             printOutput = kernel.printOutput,
                             colorWrite = monitor.colorWrite,
                             colorPrint = monitor.colorPrint,
-                        }
+                            replaceLine = monitor.replaceLine,
+                        },
+                        key = device.keyboard.keys,
+                        input = bios.native.read,
                     },
                 }
             }
@@ -686,6 +689,8 @@ kernel.exec("/sbin/init", kernel.env, 0, 1)
 --Kernel Main Loop
 while kernel.running do 
     local e = {bios.pullEvent()}
+    --local pp = bios.native.require("cc.pretty")
+    --pp.pretty_print(e)
     if e[1] == "terminate" or e[1] == "kernel_exit" then
         kernel.stop()
     end

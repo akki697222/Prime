@@ -1,3 +1,4 @@
+---@class graphics
 local graphics = {}
 
 --- &x (16bit color code) to change color. (Special codes: &r(Reset colors to default))
@@ -50,6 +51,17 @@ end
 
 function graphics.write(...)
     io.write(...)
+end
+
+function graphics.replaceLine(line, ...)
+    local x, y = term.getCursorPos()
+    local w, h = term.getSize()
+    term.setCursorPos(1, line)
+    for i = 1, w do
+        io.write(" ")
+    end
+    io.write(...)
+    term.setCursorPos(x, y)
 end
 
 function graphics.setPosition(x, y)

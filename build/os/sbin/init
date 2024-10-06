@@ -28,11 +28,9 @@ status("initstatus false", false)
 user.setCurrent(1)
 
 process.exec("/usr/bin/ps", _ENV, 1)
-process.exec("/usr/bin/ls", _ENV, 1, nil, nil, {"boot"})
-process.exec("/usr/bin/ls", _ENV, 1, nil, nil, {"tmp"})
-process.exec("/usr/bin/ls", _ENV, 10)
-
-process.exec("/usr/bin/ls", _ENV, 10,nil,nil,{"/no/such/file/or/directory"})
+process.exec("/usr/bin/ls", _ENV, 1, nil, nil, {"boot", "-al"})
+process.exec("/usr/bin/ls", _ENV, 1, nil, nil, {"", "-la"})
+process.exec("/usr/bin/ls", _ENV, 10, nil, nil, {"home", "-a"})
 
 printf("User Filesystem Read/Write/Delete Test")
 local file = fs.open("/tmp/akki.txt", "w")
@@ -48,3 +46,7 @@ if file ~= nil then
 end
 
 process.exec("/usr/bin/cat", _ENV, 5, nil, nil, {"/tmp/akki.txt"})
+process.exec("/usr/bin/cash", _ENV, 0)
+
+local terminal = require("usr.bin.terminal")  -- terminal.lua を require
+terminal.run()

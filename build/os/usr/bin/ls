@@ -1,5 +1,5 @@
-local args = {...}
 if type(printf) ~= "function" then error("Not Prime") return end
+local aparse = require("system.util.argparse")
 local user = require("system.user")
 local fs = require("system.filesystem")
 local date = require("system.util.date")
@@ -8,39 +8,63 @@ local printutils = require("system.util.print")
 
 local listIgnores = {".meta"}
 
-if not args[1] then
-    args[1] = "/"
-end
+local parser = aparse("ls", "list")
+parser:argument("directory", "", "/")
+parser:flag("-a --all", "do not ignore entries starting with .")
+parser:flag("-l", "use a long listing format")
 
-if not fs.exists(fs.combine("/", args[1])) then
+local args = {...}
+local argrm = {}
+for index, value in ipairs(args) do
+    if value == "" then
+        table.insert(argrm, index)
+    end
+end
+for index, value in ipairs(argrm) do
+    table.remove(args, value)
+end
+args = parser:parse(args)
+
+--printf(textutils.serialiseJSON(args))
+
+if not fs.exists(fs.combine("/", args.directory)) then
     printf("ls: No such file or directory")
     return
 end
 
-local list = fs.list(fs.combine("/", args[1]))
+local list = fs.list(fs.combine("/", args.directory))
 local dir = {}
 local file = {}
-local simple = false
+local advanced = args.l
 if list then
     for index, value in ipairs(list) do
-        if fs.isDir(fs.combine(args[1], value.name)) then
-            table.insert(dir, value)
+        if fs.isDir(fs.combine(args.directory, value.name)) then
+            if value.name:match("^%.") then
+                if args.all then
+                    table.insert(dir, value)
+                end
+            else
+                table.insert(dir, value)
+            end
         else
             table.insert(file, value)
         end
     end
 end
-local perm_table = permission.getPermissionTable(args[1])
+local perm_table = permission.getPermissionTable(args.directory)
 local print_table = {}
-if simple then
+if not advanced then
     print_table = {{}}
     for index, value in ipairs(dir) do
         table.insert(print_table[1], value.name)
     end
     for index, value in ipairs(file) do
-        table.insert(print_table[1], value.name)
+        if value.name ~= ".meta" then
+            table.insert(print_table[1], value.name)
+        end
     end
-else
+elseif advanced then
+    printf("total "..#list)
     for index, value in ipairs(dir) do
         if perm_table ~= nil then
             if perm_table[value.name] ~= nil then

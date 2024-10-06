@@ -1,16 +1,14 @@
 local entries = {
-    ["PrimeOS"] = partition.directories.disk .. partition.getPartitionData("primeos").path .. "/boot/boot.lua",
-    ["Exit"] = "exit",
+    {name = "PrimeOS", bootcommand = partition.directories.disk .. partition.getPartitionData("primeos").path .. "/boot/boot.lua"},
+    {name = "Exit", bootcommand = "exit"}
 }
 local function drawEntry()
-    local idx = 1
     local entries_array = {}
     monitor.reset()
     monitor.print("Prime Default Bootloader\n")
-    for key, value in pairs(entries) do
-        monitor.print(idx .. ". " .. key)
+    for index, value in ipairs(entries) do
+        monitor.print(index .. ". " .. value.name)
         table.insert(entries_array, value)
-        idx = idx + 1
     end
     monitor.write("\nBoot Entry: ")
     local input = read()
@@ -18,10 +16,10 @@ local function drawEntry()
         input = tonumber(input)
         if entries_array[input] then
             monitor.reset()
-            if entries_array[input] == "exit" then
+            if entries_array[input].bootcommand == "exit" then
                 return
             end
-            bios.execute(entries_array[input])
+            bios.execute(entries_array[input].bootcommand)
         else
             drawEntry()
         end

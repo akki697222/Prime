@@ -16,6 +16,8 @@ local bios = {native = {
     require = require,
     dofile = dofile,
     loadfile = loadfile,
+    parallel = parallel,
+    read = read,
 }}
 
 function bios.init()
@@ -125,6 +127,7 @@ function bios.execute(path)
         read = read,
         pcall = pcall,
         xpcall = xpcall,
+        type = type,
     }, {})
     if setfenv then
         setfenv(func, env)
