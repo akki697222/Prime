@@ -47,6 +47,3 @@ end
 
 process.exec("/usr/bin/cat", _ENV, 5, nil, nil, {"/tmp/akki.txt"})
 process.exec("/usr/bin/cash", _ENV, 0)
-
-local terminal = require("usr.bin.terminal")  -- terminal.lua を require
-terminal.run()

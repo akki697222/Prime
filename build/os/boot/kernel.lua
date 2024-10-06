@@ -30,9 +30,12 @@ kernel.user = {}
 local timeapi = {}
 ---@class eventsystem
 local eventsystem = {}
+---@class user
 local user = {group = {}}
 local user_data = {user = {}, group = {}}
+---@class filesystem
 local userfs = {}
+---@class permission
 local fperm = {}
 local errors = {
     [-1] = true,
@@ -504,13 +507,14 @@ function kernel.init()
         read = read,
         pcall = pcall,
         xpcall = xpcall,
+        sleep = sleep,
         require = function (...)
             if not ... then
                 return nil
             end
             local lp = kernel.fs.getLocalPath()
             package.path = lp.."/?;"..lp.."/usr/lib/?;"..lp.."/?.lua;"..lp.."/usr/lib/?.lua;"
-            ---@class primeDefaultEnv
+            ---@class primeDefaultModule
             local modules = {
                 system = {
                     user = user,
@@ -565,8 +569,6 @@ function kernel.init()
                 else
                     if _VERSION == "Lua 5.1" then
                         setfenv(res, kernel.env)
-                    else
-                        
                     end
                     return res()
                 end
@@ -584,8 +586,9 @@ function kernel.log(vendor, ...)
     end
 end
 
-function kernel.fork(name, func, priority)
-    eventsystem.push("kcall_fork_process", name, func, priority)
+function kernel.fork()
+    local info = debug.getinfo(2, "fS")
+    eventsystem.push("kcall_fork_process", info.func, info.source)
 end
 
 function kernel.exec(path, env, priority, pid, usr, arguments)
@@ -701,10 +704,9 @@ while kernel.running do
     end
     if e[1] == "kcall_fork_process" then
         table.remove(e, 1)
-        local name = table.remove(e, 1)
-        local prio = table.remove(e, 1)
-        local pid = table.maxn(kernel.process)
-        table.insert(kernel.process, {thread = coroutine.create(bios.native.nativeRun), PID = pid, path = name, priority = prio, env = _ENV})
+        local func = table.remove(e, 1)
+        local path = table.remove(e, 1)
+        table.insert(kernel.process, {thread = coroutine.create(func), PID = table.maxn(kernel.process) + 1, path = path, priority = 0, env = kernel.env, user = user.getCurrent(), arguments = {}})
     elseif e[1] == "kcall_start_process" then
         table.remove(e, 1)
         local path = table.remove(e, 1)

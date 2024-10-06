@@ -128,6 +128,7 @@ function bios.execute(path)
         pcall = pcall,
         xpcall = xpcall,
         type = type,
+        sleep = sleep,
     }, {})
     if setfenv then
         setfenv(func, env)

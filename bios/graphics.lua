@@ -61,6 +61,14 @@ function graphics.replaceLine(line, ...)
     term.setCursorPos(x, y)
 end
 
+function graphics.setBlink(state)
+    term.setCursorBlink(state)
+end
+
+function graphics.getBlink()
+    return term.getCursorBlink()
+end
+
 function graphics.setPosition(x, y)
     term.setCursorPos(x, y)
 end
