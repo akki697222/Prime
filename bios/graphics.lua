@@ -54,12 +54,8 @@ function graphics.write(...)
 end
 
 function graphics.replaceLine(line, ...)
-    local x, y = term.getCursorPos()
-    local w, h = term.getSize()
     term.setCursorPos(1, line)
-    for i = 1, w do
-        io.write(" ")
-    end
+    term.clearLine()
     io.write(...)
     term.setCursorPos(x, y)
 end
