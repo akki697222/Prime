@@ -2,51 +2,91 @@
     "bin": {
         "permission": "rwxr-xr-x",
         "owner": 0,
-        "group": 0
+        "group": 0,
+        "timestamp": {
+            "btime": 0,
+            "mtime": 0
+        }
     },
     "boot": {
         "permission": "rwxr-xr-x",
         "owner": 0,
-        "group": 0
+        "group": 0,
+        "timestamp": {
+            "btime": 0,
+            "mtime": 0
+        }
     },
     "dev": {
         "permission": "rwxr-xr-x",
         "owner": 0,
-        "group": 0
+        "group": 0,
+        "timestamp": {
+            "btime": 0,
+            "mtime": 0
+        }
     },
     "etc": {
         "permission": "rwxr-xr-x",
         "owner": 0,
-        "group": 0
+        "group": 0,
+        "timestamp": {
+            "btime": 0,
+            "mtime": 0
+        }
     },
     "home": {
         "permission": "rwxr-xr-x",
         "owner": 0,
-        "group": 0
+        "group": 0,
+        "timestamp": {
+            "btime": 0,
+            "mtime": 0
+        }
     },
     "sbin": {
         "permission": "rwxr-xr-x",
         "owner": 0,
-        "group": 0
+        "group": 0,
+        "timestamp": {
+            "btime": 0,
+            "mtime": 0
+        }
     },
     "proc": {
         "permission": "r-xr-xr-x",
         "owner": 0,
-        "group": 0
+        "group": 0,
+        "timestamp": {
+            "btime": 0,
+            "mtime": 0
+        }
     },
     "tmp": {
         "permission": "rwxrwxrwx",
         "owner": 0,
-        "group": 0
+        "group": 0,
+        "timestamp": {
+            "btime": 0,
+            "mtime": 0
+        }
     },
     "root": {
         "permission": "rwx------",
         "owner": 0,
-        "group": 0
+        "group": 0,
+        "timestamp": {
+            "btime": 0,
+            "mtime": 0
+        }
     },
     ".permission": {
         "permission": "rwx------",
         "owner": 0,
-        "group": 0
+        "group": 0,
+        "timestamp": {
+            "btime": 0,
+            "mtime": 0
+        }
     }
 }

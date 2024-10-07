@@ -24,8 +24,8 @@ if not part or not boot then
 end
 
 local s, e = pcall(function ()
-    fs.copy("/build/bootloader/*", boot.getLocalPath())
-    fs.copy("/build/os/*", part.getLocalPath())
+    fs.copy("/build/bootloader/", boot.getLocalPath())
+    fs.copy("/build/os/", part.getLocalPath())
 end)
 if not s then
     partition.delete(temp_partition_name)

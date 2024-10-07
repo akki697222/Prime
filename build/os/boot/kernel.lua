@@ -557,6 +557,7 @@ function kernel.init()
                 end
             end
             if normal then
+                --[[
                 local localpath = kernel.fs.getLocalPath()
                 local a = localpath .. "/" .. string.gsub(..., "%.", "/")
                 printf(a)
@@ -572,6 +573,11 @@ function kernel.init()
                     end
                     return res()
                 end
+                ]]
+                if setfenv then
+                    setfenv(bios.native.require, kernel.env)
+                end
+                res = require(...)
             end
             return res
         end
