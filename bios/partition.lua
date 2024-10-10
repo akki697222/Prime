@@ -10,6 +10,49 @@ local part = {
     }
 }
 
+local function copyAllFiles(sourceDir, destDir)
+    if not fs.exists(destDir) then
+        fs.makeDir(destDir)
+    end
+
+    local function copyFolder(source, dest)
+        if not fs.exists(dest) then
+            fs.makeDir(dest)
+        end
+
+        local files = fs.list(source)
+
+        for _, file in ipairs(files) do
+            local sourcePath = fs.combine(source, file)
+            local destPath = fs.combine(dest, file)
+
+            if fs.isDir(sourcePath) then
+                copyFolder(sourcePath, destPath)
+            else
+                if fs.exists(sourcePath) then
+                    fs.copy(sourcePath, destPath)
+                end
+            end
+        end
+    end
+
+    local files = fs.list(sourceDir)
+
+    for _, file in ipairs(files) do
+        local sourcePath = fs.combine(sourceDir, file)
+        local destPath = fs.combine(destDir, file)
+
+        if fs.isDir(sourcePath) then
+            copyFolder(sourcePath, destPath)
+        else
+            if fs.exists(sourcePath) then
+                fs.copy(sourcePath, destPath)
+            end
+        end
+    end
+end
+
+
 ---Partition initialize
 function part.init()
     if not fs.exists(disk_data) then
@@ -178,7 +221,7 @@ function part.mount(name)
             fs.delete(fullpath)
         end
         fs.makeDir(fullpath)
-        fs.copy(disk_data..partition.path, fullpath)
+        copyAllFiles(disk_data..partition.path, fullpath)
         addMountToInfo(name, partition.path)
     end
 end
@@ -195,7 +238,7 @@ function part.unmount(name)
         local mount, mountIndex = getMount(name)
         if mount.path ~= nil and mount.name ~= nil then
             fs.delete(disk_data..mount.path)
-            fs.copy(mounted_disk_data..mount.path, disk_data..mount.path)
+            copyAllFiles(mounted_disk_data..mount.path, disk_data..mount.path)
             fs.delete(mounted_disk_data..mount.path)
             table.remove(data, mountIndex)
         end

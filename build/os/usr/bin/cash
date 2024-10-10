@@ -1,7 +1,0 @@
-local read = require("system.util.input")
----@type eventsystem
-local event = require("system.event")
-local input = read()
-printf(input)
-printf("cashend")
-event.push("init_exit")

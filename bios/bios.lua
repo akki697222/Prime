@@ -17,7 +17,9 @@ local bios = {native = {
     dofile = dofile,
     loadfile = loadfile,
     parallel = parallel,
+    peripheral = peripheral,
     read = read,
+    os = os,
 }}
 
 function bios.init()
@@ -129,6 +131,9 @@ function bios.execute(path)
         xpcall = xpcall,
         type = type,
         sleep = sleep,
+        setmetatable = setmetatable,
+        getmetatable = getmetatable,
+        next = next,
     }, {})
     if setfenv then
         setfenv(func, env)

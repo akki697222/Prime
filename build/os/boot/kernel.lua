@@ -9,8 +9,69 @@ local function checkModules()
     end
 end
 
+function table.deepcopy(orig, copies)
+    copies = copies or {}
+    if copies[orig] then return copies[orig] end
+
+    local orig_type = type(orig)
+    local copy
+    if orig_type == 'table' then
+        copy = {}
+        copies[orig] = copy
+        for orig_key, orig_value in next, orig, nil do
+            copy[table.deepcopy(orig_key, copies)] = table.deepcopy(orig_value, copies)
+        end
+        setmetatable(copy, table.deepcopy(getmetatable(orig), copies))
+    else
+        copy = orig
+    end
+    return copy
+end
+
+---@class kernel
 local kernel = {}
---Kernel Globals
+---@class date
+local timeapi = {}
+---@class eventsystem
+local eventsystem = {}
+---@class user
+local user = {group = {}}
+local user_data = {user = {}, group = {}}
+---@class filesystem
+local userfs = {}
+---@class permission
+local fperm = {}
+---@class module
+local module = {}
+
+--- @class process_data
+--- @field thread thread
+--- @field PID integer
+--- @field path string
+--- @field nice integer
+--- @field env table
+--- @field user string
+--- @field arguments table
+--- @field parent integer
+
+--- @class single_permission_table
+--- @field r boolean
+--- @field w boolean
+--- @field x boolean
+
+--- @class multi_permission_table
+--- @field owner single_permission_table
+--- @field group single_permission_table
+--- @field other single_permission_table
+
+--- @class module_manifest
+--- @field name string
+--- @field license string
+--- @field author string
+--- @field desc string
+--- @field version string
+
+-- Kernel Globals
 kernel.mode = {
     debug = true,
 }
@@ -25,25 +86,8 @@ kernel.running = true
 kernel.process = {}
 kernel.eventhandlers = {}
 kernel.user = {}
-
----@class date
-local timeapi = {}
----@class eventsystem
-local eventsystem = {}
----@class user
-local user = {group = {}}
-local user_data = {user = {}, group = {}}
----@class filesystem
-local userfs = {}
----@class permission
-local fperm = {}
-local errors = {
-    [-1] = true,
-    [0] = "Permission Denied.",
-    [1] = "File not found.",
-    [2] = "No such file or directory."
-}
-local peripheral = {}
+kernel.currentHandling = -1
+kernel.loaded_modules = {}
 
 ---What happened!? ... Yes, the kernel seems to have crashed...
 function panic(message, errors)
@@ -57,18 +101,40 @@ function panic(message, errors)
     kernel.stop()
 end
 
+function require(...)
+    if not ... then
+        return nil
+    end
+    local res = kernel.modules
+    local normal = false
+    for part in string.gmatch(..., "[^.]+") do
+        if res[part] then
+            res = res[part]
+        else
+            normal = true
+        end
+    end
+    if normal then
+        if setfenv then
+            setfenv(bios.native.require, kernel.env)
+        end
+        res = require(...)
+    end
+    return res
+end
+
 --EventSystem API
 
 function eventsystem.push(event, ...)
-    bios.queueEvent(event, ...)
+    bios.native.os.queueEvent(event, ...)
 end
 
 function eventsystem.pull(filter)
-    return bios.pullEvent(filter)
+    return bios.native.os.pullEvent(filter)
 end
 
 function eventsystem.pullRaw(filter)
-    return bios.pullEventRaw(filter)
+    return bios.native.os.pullEventRaw(filter)
 end
 
 ---@param func function
@@ -166,10 +232,9 @@ end
 
 ---@param name string
 ---@param gid number
----@param permission string #rwxrwxrwx
-function user.group.create(name, gid, permission)
+function user.group.create(name, gid)
     local gid = gid or table.maxn(user_data.group) + 1
-    table.insert(user_data.group, {name = name, id = gid, permission = permission or "rwxr-xr-x", gid = gid})
+    table.insert(user_data.group, {name = name, id = gid, gid = gid})
     user.save()
     return gid
 end
@@ -223,7 +288,7 @@ function userfs.open(path, mode)
         if perm_table[kernel.fs.getFile(path)] ~= nil then
             perm_table[kernel.fs.getFile(path)].timestamp.mtime = timeapi.epoch("local") / 1000
         else
-            perm_table[kernel.fs.getFile(path)] = fperm.generateMetatable("rwxr--r--", false)
+            perm_table[kernel.fs.getFile(path)] = fperm.generateMetatable(nil, false)
         end
         fperm.update(kernel.fs.getDir(path), perm_table)
     else
@@ -249,13 +314,13 @@ function userfs.delete(path)
             elseif perm_table[kernel.fs.getFile(path)].group == user.getData(kernel.user).gid then
                 kernel.fs.delete(path)
                 return true
-            elseif fperm.isGroupHasPermission(user.getData(kernel.user).gid, "rw-", "other") then
+            elseif fperm.isGroupHasPermission(user.getData(kernel.user).gid, {r = true, w = true, x = false}, "other") then
                 kernel.fs.delete(path)
                 return true
             else
                 return 0
             end
-            printf(fperm.isGroupHasPermission(user.getData(kernel.user).gid, "rw-", "group"))
+            printf(fperm.isGroupHasPermission(user.getData(kernel.user).gid, {r = true, w = true, x = false}, "group"))
             perm_table[kernel.fs.getFile(path)] = nil
             fperm.update(kernel.fs.getDir(path), perm_table)
         end
@@ -282,7 +347,7 @@ end
 -- File permission API
 function fperm.generateMetatable(permission, isDir, owner, group)
     return {
-        permission = permission or "rwxr--r--",
+        permission = permission or {owner = {r = true, w = true, x = false}, group = {r = true, w = false, x = false}, other = {r = true, w = false, x = false}},
         owner = owner or kernel.user, 
         group = group or user.getData(kernel.user).gid, 
         isDir = isDir, 
@@ -306,26 +371,27 @@ function fperm.update(path, table)
     end
 end
 
-function fperm.isGroupHasPermission(gid, perm, mode)
-    local group_data = user.group.getData(gid)
-    local group_perm = ""
-    if group_data == nil then
-        printf("invalid group id "..gid)
-        return
+---@alias user_permission_mode
+---| '"owner"' #Owner
+---| '"group"' #Group
+---| '"other"' #Other
+---@param perm multi_permission_table
+---@param required_perm single_permission_table
+---@param mode user_permission_mode
+function fperm.hasPermission(perm, required_perm, mode)
+    local actual_perm = perm[mode]
+
+    if required_perm.r and not actual_perm.r then
+        return false
     end
-    if mode == "owner" then
-        group_perm = string.sub(group_data.permission, 1, 3)
-    elseif mode == "group" then
-        group_perm = string.sub(group_data.permission, 4, 6)
-    elseif mode == "other" then
-        group_perm = string.sub(group_data.permission, 7, 9)
-    elseif mode ~= nil then
-        printf("invalid mode '"..mode.."'")
-    else
-        printf("please specify the mode")
+    if required_perm.w and not actual_perm.w then
+        return false
     end
-    printf(perm)
-    printf(group_perm)
+    if required_perm.x and not actual_perm.x then
+        return false
+    end
+    
+    return true
 end
 
 function fperm.init()
@@ -362,13 +428,12 @@ function fperm.init()
         end
         nest(value)
     end
-    --printf(textutils.serialiseJSON(directory))
     for index, value in ipairs(directory) do
         local permissiondata = {}
         if not kernel.fs.exists(value..".meta") then
             local file = kernel.fs.open(value..".meta", "w")
             if file ~= nil then
-                file.write(textutils.serialiseJSON({[".meta"] = {permission = "rwx------", owner = 0, group = 0, isDir = false, size = 0, timestamp = {btime = 0, mtime = 0}}}))
+                file.write(textutils.serialiseJSON({[".meta"] = {permission = {owner = {r = true, w = true, x = true}, group = {r = false, w = false, x = false}, other = {r = false, w = false, x = false}}, owner = 0, group = 0, isDir = false, size = 0, timestamp = {btime = 0, mtime = 0}}}))
                 file.close()
             end
         end
@@ -381,7 +446,7 @@ function fperm.init()
         local listdir = kernel.fs.list(value)
         for i, v in ipairs(listdir) do
             if permissiondata[v.name] == nil then
-               permissiondata[v.name] = {permission = "rwxr--r--", owner = 0, group = 0, size = v.attributes.size or 0, timestamp = {btime = v.attributes.created / 1000, mtime = v.attributes.modified / 1000}}
+               permissiondata[v.name] = {permission = {owner = {r = true, w = true, x = true}, group = {r = true, w = false, x = false}, other = {r = true, w = false, x = false}}, owner = 0, group = 0, size = v.attributes.size or 0, timestamp = {btime = v.attributes.created / 1000, mtime = v.attributes.modified / 1000}}
             end 
             if permissiondata[v.name].timestamp == nil then
                 permissiondata[v.name].timestamp = {btime = 0, mtime = 0}
@@ -391,52 +456,45 @@ function fperm.init()
             end
         end
         if file ~= nil then
+            if kernel.mode.debug then
+                kernel.log("Debug", "Generated .meta in directory: "..value)
+            end
             file.write(textutils.serialiseJSON(permissiondata))
             file.close()
         end
-        --printf("("..value..") "..textutils.serialiseJSON(permissiondata))
     end
 end
 
-function fperm.parseDigit(permission)
-    local permission_map = {["r"] = 4, ["w"] = 2, ["x"] = 1, ["-"] = 0}
-    local owner, group, other = permission:sub(1, 3), permission:sub(4, 6), permission:sub(7, 9)
-    local function parseSection(section)
-        return (permission_map[section:sub(1, 1)] or 0) + (permission_map[section:sub(2, 2)] or 0) + (permission_map[section:sub(3, 3)] or 0)
+---@param perm multi_permission_table
+function fperm.parseToString(perm)
+    local res = ""
+    ---@param sperm single_permission_table
+    local function conc(sperm)
+        if sperm.r then
+            res = res .. "r"
+        else
+            res = res .. "-"
+        end
+        if sperm.w then
+            res = res .. "w"
+        else
+            res = res .. "-"
+        end
+        if sperm.x then
+            res = res .. "x"
+        else
+            res = res .. "-"
+        end
     end
-    local res = parseSection(owner) .. parseSection(group) .. parseSection(other)
-
+    conc(perm.owner)
+    conc(perm.group)
+    conc(perm.other)
     return res
 end
 
-local permissions = {
-    [7] = "rwx",
-    [6] = "rw-",
-    [5] = "r-x",
-    [4] = "r--",
-    [3] = "-wx",
-    [2] = "-w-",
-    [1] = "--x",
-    [0] = "---"
-}
-
-function fperm.parseSingleString(permission)
-    return permissions[permission]
-end
-
-function fperm.parseString(permission)
-    if permission < 0 or permission > 777 then
-        return nil
-    end
-
-    local result = ""
+---@param perm multi_permission_table
+function fperm.parseToDigit(perm)
     
-    for i = 1, 3 do
-        local digit = math.floor(permission / 10^(3-i)) % 10
-        result = result .. permissions[digit]
-    end
-    
-    return result
 end
 
 function fperm.getPermissionTable(path)
@@ -447,7 +505,7 @@ function fperm.getPermissionTable(path)
     return {}
 end
 
----@param permission number|string You can use permissions like 777.
+---@param permission multi_permission_table
 function fperm.setPermissionTable(path, file, permission)
 
 end
@@ -462,11 +520,32 @@ function timeapi.date(format, time)
     return bios.date(format, time)
 end
 
+-- Module API
+
+---@param path string
+---@param manifest module_manifest
+function module.load(path, manifest)
+    if kernel.fs.exists(path) then
+        if type(manifest) == "table" then
+            if manifest.name and manifest.desc and manifest.version then
+                
+            else
+                kernel.log("(Module)", "Invalid module manifest")
+            end
+        else
+            kernel.log("(Module)", "Invalid module manifest")
+        end
+    else
+        kernel.log("(Module)", "No such file")
+    end
+end
+
 -- Kernel API
 
 function kernel.init()
     --Kernel init
     kernel.fs.delete("/proc/*")
+    kernel.fs.mkdir("/usr/lib/modules/"..kernel.ver.."/kernel/drivers")
     local file = kernel.fs.open("/proc/computerinfo", "w")
     if file ~= nil then
         file.write("Computer Infomation")
@@ -475,8 +554,8 @@ function kernel.init()
         file.close()
     end
     user_data.user[1] = {name = "root", id = 0, uid = 0, gid = 0, passwd = ""}
-    user_data.group[1] = {name = "root", id = 0, gid = 0, permission = "rwxrwxrwx"}
-    user_data.group[2] = {name = "default", id = 100, gid = 100, permission = "rwxr-xr-x"}
+    user_data.group[1] = {name = "root", id = 0, gid = 0}
+    user_data.group[2] = {name = "default", id = 100, gid = 100}
     if kernel.mode.debug == true then
         user.create("debug_user", "debug", 100, 1)
     else
@@ -489,14 +568,22 @@ function kernel.init()
     --Module initialize
     fperm.init()
     user.init()
-    
+    -- Initialize for require
+    local lp = kernel.fs.getLocalPath()
+    if kernel.mode.debug then
+        package.path = package.path..";"..lp.."/?;"..lp.."/usr/lib/?;"..lp.."/?.lua;"..lp.."/usr/lib/?.lua;"
+    else
+        package.path = lp.."/?;"..lp.."/usr/lib/?;"..lp.."/?.lua;"..lp.."/usr/lib/?.lua;"
+    end
     --Setting Env
+    ---@class _ENV
     kernel.env = {
         table = table,
         textutils = textutils,
         colors = colors,
         coroutine = coroutine,
         math = math,
+        string = string,
 
         printf = printf,
         write = write,
@@ -508,112 +595,115 @@ function kernel.init()
         pcall = pcall,
         xpcall = xpcall,
         sleep = sleep,
-        require = function (...)
-            if not ... then
-                return nil
-            end
-            local lp = kernel.fs.getLocalPath()
-            package.path = lp.."/?;"..lp.."/usr/lib/?;"..lp.."/?.lua;"..lp.."/usr/lib/?.lua;"
-            ---@class primeDefaultModule
-            local modules = {
-                system = {
-                    user = user,
-                    permission = fperm,
-                    monitor = monitor,
-                    system = {
-                        ver = kernel.ver,
-                        name = kernel.name,
-                        root = kernel.partition.root
-                    },
-                    event = eventsystem,
-                    filesystem = userfs,
-                    process = {
-                        fork = kernel.fork,
-                        exec = kernel.exec,
-                        get = kernel.getProcess,
-                        kill = kernel.killProcess,
-                    },
-                    util = {
-                        date = timeapi,
-                        argparse = bios.native.require("argparse"),
-                        print = {
-                            printOutput = kernel.printOutput,
-                            colorWrite = monitor.colorWrite,
-                            colorPrint = monitor.colorPrint,
-                            replaceLine = monitor.replaceLine,
-                        },
-                        key = device.keyboard.keys,
-                        input = bios.native.read,
-                    },
-                }
-            }
-            local res = modules
-            local normal = false
-            for part in string.gmatch(..., "[^.]+") do
-                if res[part] then
-                    res = res[part]
-                else
-                    normal = true
-                end
-            end
-            if normal then
-                --[[
-                local localpath = kernel.fs.getLocalPath()
-                local a = localpath .. "/" .. string.gsub(..., "%.", "/")
-                printf(a)
-                res = bios.native.loadfile(a, "t", kernel.env)
-                if not res then
-                    res = bios.native.loadfile(localpath .. "/" .. a, "t", kernel.env)
-                end
-                if not res then
-                    printf("Module '" .. ... .. "' is not found")
-                else
-                    if _VERSION == "Lua 5.1" then
-                        setfenv(res, kernel.env)
-                    end
-                    return res()
-                end
-                ]]
-                if setfenv then
-                    setfenv(bios.native.require, kernel.env)
-                end
-                res = require(...)
-            end
-            return res
-        end
+        setmetatable = setmetatable,
+        getmetatable = getmetatable,
+        next = next,
+        require = require,
+
+        _ERR = 0,
     }
+    ---@class modules
+    kernel.modules = {
+        ---@class system
+        system = {
+            user = user,
+            permission = fperm,
+            monitor = monitor,
+            ---@class system_info
+            system = {
+                ver = kernel.ver,
+                name = kernel.name,
+                root = kernel.partition.root
+            },
+            event = eventsystem,
+            filesystem = userfs,
+            ---@class process
+            process = {
+                fork = kernel.fork,
+                exec = kernel.exec,
+                getTable = kernel.getProcess,
+                getProcess = kernel.getProcessFromPID,
+                get = kernel.getCurrentProcess,
+                kill = kernel.killProcess,
+            },
+            ---@class util
+            util = {
+                date = timeapi,
+                argparse = bios.native.require("argparse") or function()printf("Failed to setup module 'argparse'")end,
+                ---@class printUtils
+                print = {
+                    printOutput = kernel.printOutput,
+                    colorWrite = monitor.colorWrite,
+                    colorPrint = monitor.colorPrint,
+                    replaceLine = monitor.replaceLine,
+                },
+                key = device.keyboard.keys,
+            },
+            module = module
+        }
+    }   
 end
 
 function kernel.log(vendor, ...)
     if not ... then
         printf("["..bios.uptime().."] ".. vendor)
     else
-        printf("["..bios.uptime().."] ["..vendor.."] ".. ...)
+        printf("["..bios.uptime().."] ("..vendor..") ".. ...)
     end
+end
+
+function kernel.getCurrentProcess()
+    return kernel.currentHandling
 end
 
 function kernel.fork()
-    local info = debug.getinfo(2, "fS")
-    eventsystem.push("kcall_fork_process", info.func, info.source)
+    local info = bios.debug.getinfo(2, "fS")
+    local new_pid = table.maxn(kernel.process) + 1
+    local new_process = {
+        thread = coroutine.create(function()
+            local pid = coroutine.yield()
+            if pid == 0 then
+                return info.func()
+            end
+        end),
+        PID = new_pid,
+        path = info.source,
+        nice = 3,
+        env = table.deepcopy(kernel.env),
+        user = user.getData(user.getCurrent()).name,
+        arguments = {},
+        parent = kernel.currentHandling
+    }
+    
+    table.insert(kernel.process, new_process)
+    
+    eventsystem.push("kcall_fork_complete", new_pid)
+
+    local parent = kernel.getProcessFromPID(kernel.currentHandling)
+    if parent then
+        if parent.parent > 0 then
+            return 0
+        end
+    end
+    
+    return new_pid
 end
 
-function kernel.exec(path, env, priority, pid, usr, arguments)
-    if env == nil then
-        env = kernel.env
+function kernel.exec(path, env, nice, arguments)
+    if type(path) ~= "string" then
+        printf("exec: bad argument #1 (Expected string, got " .. type(path) .. ")")
+        return
     end
-    if priority == nil then
-        priority = 3
+    if type(env) ~= "table" then
+        env = table.deepcopy(kernel.env)
     end
-    if pid == nil then
-        pid = table.maxn(kernel.process) + 1
+    if type(nice) ~= "number" then
+        nice = 3
     end
-    if usr == nil then
-        usr = user.getData(user.getCurrent()).name or "Unknown(Kernel bug or error)"
-    end
-    if arguments == nil then
+    if type(arguments) ~= "table" then
         arguments = {}
     end
-    eventsystem.push("kcall_start_process", path, env, priority, pid, usr, arguments)
+    eventsystem.push("kcall_start_process", path, env, nice, table.maxn(kernel.process) + 1, user.getCurrent(), arguments)
 end
 
 function kernel.killProcess(pid)
@@ -622,6 +712,15 @@ end
 
 function kernel.getProcess()
     return kernel.process
+end
+
+function kernel.getProcessFromPID(pid)
+    for index, value in ipairs(kernel.process) do
+        if value.PID == pid then
+            return value, index
+        end
+    end
+    return nil, -1
 end
 
 function kernel.stop()
@@ -678,14 +777,17 @@ end
 kernel.log("Initializing hardware...")
 
 kernel.log("Setting up file systems...")
-kernel.fs = filesystem.create("mount", kernel.partition.root)
+local new_fs = filesystem.create("mount", kernel.partition.root)
 
-if kernel.fs == nil then
+if new_fs == nil then
     if not partition.exists(kernel.partition.root, "mount") then
         panic("System partition is not mounted.")
     else
         panic("Unhandled error. (Filesystem nil)")
     end
+else
+    ---@type filesystem_handler
+    kernel.fs = new_fs
 end
 
 if kernel.fs.isReadOnly() then
@@ -694,26 +796,24 @@ end
 
 kernel.init()
 
-kernel.exec("/sbin/init", kernel.env, 0, 1)
+kernel.exec("/sbin/init", kernel.env, 0)
 --Kernel Main Loop
+local kernel_threads = {}
 while kernel.running do 
-    local e = {bios.pullEvent()}
+    local e = {bios.pullEventRaw()}
     --local pp = bios.native.require("cc.pretty")
     --pp.pretty_print(e)
     if e[1] == "terminate" or e[1] == "kernel_exit" then
         kernel.stop()
     end
-    for index, value in ipairs(kernel.eventhandlers) do
-        if type(value) == "function" then
-            value(e)
+    table.insert(kernel_threads, coroutine.create(function ()
+        for index, value in ipairs(kernel.eventhandlers) do
+            if type(value) == "function" then
+                value(table.deepcopy(e))
+            end
         end
-    end
-    if e[1] == "kcall_fork_process" then
-        table.remove(e, 1)
-        local func = table.remove(e, 1)
-        local path = table.remove(e, 1)
-        table.insert(kernel.process, {thread = coroutine.create(func), PID = table.maxn(kernel.process) + 1, path = path, priority = 0, env = kernel.env, user = user.getCurrent(), arguments = {}})
-    elseif e[1] == "kcall_start_process" then
+    end))
+    if e[1] == "kcall_start_process" then
         table.remove(e, 1)
         local path = table.remove(e, 1)
         local env = table.remove(e, 1)
@@ -722,9 +822,9 @@ while kernel.running do
         local user = table.remove(e, 1)
         local arguments = table.remove(e, 1)
         if not kernel.fs.exists(path) then
-            kernel.log("Failed to start process: File not found ("..path..")")
+            kernel.log("Process " .. pid .. " failed to start: No such file")
         else
-            table.insert(kernel.process, {thread = coroutine.create(bios.native.nativeRun), PID = pid, path = path, priority = prio, env = env, user = user, arguments = arguments})
+            table.insert(kernel.process, {thread = coroutine.create(bios.native.nativeRun), PID = pid, path = path, nice = prio, env = env, user = user, arguments = arguments, parent = -1})
         end
     elseif e[1] == "kcall_kill_process" then
         table.remove(e, 1)
@@ -741,15 +841,31 @@ while kernel.running do
         local message = table.remove(e, 1)
         local err = table.remove(e, 1)
         panic(message, err)
-    elseif e[1] == "filesystem_update" then
+    elseif e[1] == "kcall_fork_complete" then
         table.remove(e, 1)
-        local path = table.remove(e, 1)
-        if path == kernel.partition.root then
-            fperm.update()
+        local new_pid = table.remove(e, 1)
+        local child_process = nil
+        for _, proc in ipairs(kernel.process) do
+            if proc.PID == new_pid then
+                child_process = proc
+                break
+            end
+        end
+    
+        if child_process then
+            if coroutine.status(child_process.thread) ~= "dead" then
+                local success, result = coroutine.resume(child_process.thread, 0)
+                if not success then
+                    kernel.log("Process " .. new_pid .. " failed to start: " .. tostring(result))
+                    kernel.killProcess(new_pid)
+                end
+            else
+                kernel.killProcess(new_pid)
+            end
         end
     else
         table.sort(kernel.process, function (a, b)
-            return a.priority < b.priority
+            return a.nice < b.nice
         end)
         local function run_process_table(tbl)
             for index, value in ipairs(tbl) do
@@ -757,6 +873,7 @@ while kernel.running do
                     if coroutine.status(value.thread) == "dead" then
                         kernel.killProcess(value.PID)
                     else
+                        kernel.currentHandling = value.PID
                         local file = kernel.fs.open("/proc/"..value.PID.."/info", "w+")
                         if file ~= nil then
                             file.write("Process Infomation")
@@ -767,20 +884,35 @@ while kernel.running do
                         end
                         local s, e = coroutine.resume(value.thread, value.env, kernel.fs.combine(kernel.fs.getLocalPath(), value.path), table.unpack(value.arguments))
                         if not s then
-                            kernel.log("["..value.PID.."] (".. value.path ..") Process Exited on error: "..e)
+                            kernel.log("Process "..value.PID.." Exited on error: "..e)
                         end
                     end
                 end
             end
         end
-        --Run process with priority
+        --Run process with nice (priority)
         run_process_table(kernel.process)
+        local dead_threads = {}
+        for index, value in ipairs(kernel_threads) do
+            if type(value) == "thread" then
+                if coroutine.status(value) == "dead" then
+                    table.insert(dead_threads, index)
+                else
+                    coroutine.resume(value)
+                end
+            end
+        end
+        for index, value in ipairs(dead_threads) do
+            table.remove(kernel_threads, value)
+        end
     end
 
     if not kernel.process[1] then
         kernel.log("init exited")
         kernel.running = false
     end
+
+    eventsystem.push("empty")
 end
 
 kernel.stop()
@@ -788,7 +920,7 @@ kernel.stop()
 end, bios.debug.traceback)
 
 if not s then
-    panic("Kernel has exited on error.", e)
+    printf("Kernel has exited on error.", e)
     if _debug_mode == true then
         local file = bios.native.fs.open("/panic.txt", "w+")
         if file ~= nil then

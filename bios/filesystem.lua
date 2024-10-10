@@ -45,6 +45,7 @@ function filesystem.create(mode, name)
         end
         return nil
     end
+    ---@class filesystem_handler
     local filehandler = {}
     local opened_files = {}
     ---@alias mode

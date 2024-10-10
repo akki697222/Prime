@@ -1,6 +1,10 @@
 {
     "bin": {
-        "permission": "rwxr-xr-x",
+        "permission": {
+            "owner": {"r": true, "w": true, "x": true},
+            "group": {"r": true, "w": false, "x": true},
+            "other": {"r": true, "w": false, "x": true}
+        },
         "owner": 0,
         "group": 0,
         "timestamp": {
@@ -9,7 +13,11 @@
         }
     },
     "boot": {
-        "permission": "rwxr-xr-x",
+        "permission": {
+            "owner": {"r": true, "w": true, "x": true},
+            "group": {"r": true, "w": false, "x": true},
+            "other": {"r": true, "w": false, "x": true}
+        },
         "owner": 0,
         "group": 0,
         "timestamp": {
@@ -18,7 +26,11 @@
         }
     },
     "dev": {
-        "permission": "rwxr-xr-x",
+        "permission": {
+            "owner": {"r": true, "w": true, "x": true},
+            "group": {"r": true, "w": false, "x": true},
+            "other": {"r": true, "w": false, "x": true}
+        },
         "owner": 0,
         "group": 0,
         "timestamp": {
@@ -27,7 +39,11 @@
         }
     },
     "etc": {
-        "permission": "rwxr-xr-x",
+        "permission": {
+            "owner": {"r": true, "w": true, "x": true},
+            "group": {"r": true, "w": false, "x": true},
+            "other": {"r": true, "w": false, "x": true}
+        },
         "owner": 0,
         "group": 0,
         "timestamp": {
@@ -36,7 +52,11 @@
         }
     },
     "home": {
-        "permission": "rwxr-xr-x",
+        "permission": {
+            "owner": {"r": true, "w": true, "x": true},
+            "group": {"r": true, "w": false, "x": true},
+            "other": {"r": true, "w": false, "x": true}
+        },
         "owner": 0,
         "group": 0,
         "timestamp": {
@@ -45,7 +65,11 @@
         }
     },
     "sbin": {
-        "permission": "rwxr-xr-x",
+        "permission": {
+            "owner": {"r": true, "w": true, "x": true},
+            "group": {"r": true, "w": false, "x": true},
+            "other": {"r": true, "w": false, "x": true}
+        },
         "owner": 0,
         "group": 0,
         "timestamp": {
@@ -54,7 +78,11 @@
         }
     },
     "proc": {
-        "permission": "r-xr-xr-x",
+        "permission": {
+            "owner": {"r": true, "w": false, "x": true},
+            "group": {"r": true, "w": false, "x": true},
+            "other": {"r": true, "w": false, "x": true}
+        },
         "owner": 0,
         "group": 0,
         "timestamp": {
@@ -63,7 +91,11 @@
         }
     },
     "tmp": {
-        "permission": "rwxrwxrwx",
+        "permission": {
+            "owner": {"r": true, "w": true, "x": true},
+            "group": {"r": true, "w": true, "x": true},
+            "other": {"r": true, "w": true, "x": true}
+        },
         "owner": 0,
         "group": 0,
         "timestamp": {
@@ -72,7 +104,11 @@
         }
     },
     "root": {
-        "permission": "rwx------",
+        "permission": {
+            "owner": {"r": true, "w": true, "x": true},
+            "group": {"r": false, "w": false, "x": false},
+            "other": {"r": false, "w": false, "x": false}
+        },
         "owner": 0,
         "group": 0,
         "timestamp": {
@@ -80,8 +116,12 @@
             "mtime": 0
         }
     },
-    ".permission": {
-        "permission": "rwx------",
+    ".meta": {
+        "permission": {
+            "owner": {"r": true, "w": true, "x": true},
+            "group": {"r": false, "w": false, "x": false},
+            "other": {"r": false, "w": false, "x": false}
+        },
         "owner": 0,
         "group": 0,
         "timestamp": {

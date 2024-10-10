@@ -1,49 +1,34 @@
 if type(printf) ~= "function" then error("Not Prime") return end
 
+---@type process
 local process = require("system.process")
-local fs = require("system.filesystem")
+---@type system_info
 local system = require("system.system")
-local user = require("system.user")
+---@type printUtils
 local printutils = require("system.util.print")
 
-local initver = "0.1.0"
-local function status(message, status)
-    if status == nil then 
-        write("          ")
-    elseif status then 
-        printutils.colorWrite("[  &5OK&0  ]  ")
-    else 
-        printutils.colorWrite("[ &eFAIL&0 ]  ")
-    end
-    printf(message)
-    return status
+local initlog = {}
+function initlog.ok(...)
+    printutils.colorPrint(" ( &5OK&0 )  ".. ...)
 end
+function initlog.fail(...)
+    printutils.colorPrint(" (&eFAIL&0)  ".. ...)
+end
+function initlog.warn(...)
+    printutils.colorPrint(" (&1WARN&0)  ".. ...)
+end
+function initlog.log(...)
+    printutils.colorPrint("         ".. ...)
+end
+
+local initver = "0.1.0"
 
 printf("\n  PrimeInit "..initver.." on "..system.name.."!\n")
 
-status("initstatus nil")
-status("initstatus true", true)
-status("initstatus false", false)
+initlog.ok("OK")
+initlog.fail("FAIL")
+initlog.warn("WARN")
+initlog.log("LOG")
 
-user.setCurrent(1)
-
-process.exec("/usr/bin/ps", _ENV, 1)
-process.exec("/usr/bin/ls", _ENV, 1, nil, nil, {"boot", "-al"})
-process.exec("/usr/bin/ls", _ENV, 1, nil, nil, {"", "-la"})
-process.exec("/usr/bin/ls", _ENV, 10, nil, nil, {"home", "-a"})
-
-printf("User Filesystem Read/Write/Delete Test")
-local file = fs.open("/tmp/akki.txt", "w")
-if file ~= nil then
-    file.write("akki wo kue")
-    file.close()
-end
-process.exec("/usr/bin/ls", _ENV, 0, nil, nil, {"/tmp"})
-local file = fs.open("/tmp/akki.txt", "w")
-if file ~= nil then
-    file.write("akki wo kue2")
-    file.close()
-end
-
-process.exec("/usr/bin/cat", _ENV, 5, nil, nil, {"/tmp/akki.txt"})
-process.exec("/usr/bin/cash", _ENV, 0)
+process.exec("/usr/bin/ls", nil, nil, {"-al"})
+process.exec("/usr/bin/ps")
