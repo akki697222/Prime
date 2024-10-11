@@ -1,0 +1,25 @@
+---@type module_manifest
+local manifest = {
+    name = "computercraft_peripherals_driver",
+    version = "0.1.0-craftos",
+    path = "kernel/drivers/ccp.ko",
+    license = "MIT",
+    desc = "ComputerCraft Generic Peripherals Driver.",
+    author = "akki697222"
+}
+local main = {}
+local function start()
+    ---@type eventsystem
+    local eventsystem = require("system.event")
+    local peripheral = require("system.generic.peripheral")
+    local function eventhandler(event)
+        if event[1] == "peripheral" then
+            table.remove(event, 1)
+            local types = table.remove(event, 1)
+            printf("Peripheral attached. (Type: "..peripheral.getType(types)")")
+        end
+    end
+    eventsystem.addEventHandler(eventhandler)
+end
+
+return main, start, manifest

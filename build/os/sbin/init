@@ -1,11 +1,11 @@
-if type(printf) ~= "function" then error("Not Prime") return end
-
 ---@type process
 local process = require("system.process")
 ---@type system_info
 local system = require("system.system")
 ---@type printUtils
 local printutils = require("system.util.print")
+---@type module
+local module = require("system.module")
 
 local initlog = {}
 function initlog.ok(...)
@@ -21,6 +21,12 @@ function initlog.log(...)
     printutils.colorPrint("         ".. ...)
 end
 
+--Load drivers
+---@type table, function, module_manifest
+local main, init, manifest = require("kernel.drivers.ccp")
+module.register(main, init, manifest)
+module.load(manifest.name)
+
 local initver = "0.1.0"
 
 printf("\n  PrimeInit "..initver.." on "..system.name.."!\n")
@@ -30,5 +36,9 @@ initlog.fail("FAIL")
 initlog.warn("WARN")
 initlog.log("LOG")
 
-process.exec("/usr/bin/ls", nil, nil, {"-al"})
-process.exec("/usr/bin/ps")
+--process.exec("/usr/bin/ls", nil, nil, {"-al"})
+--process.exec("/usr/bin/ps")
+
+while true do
+    coroutine.yield()
+end

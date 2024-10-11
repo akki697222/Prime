@@ -1,3 +1,4 @@
+local debug = true
 local s, e = xpcall(function ()
 
 local function checkModules()
@@ -43,6 +44,8 @@ local userfs = {}
 local fperm = {}
 ---@class module
 local module = {}
+---@class device
+local dev = {}
 
 --- @class process_data
 --- @field thread thread
@@ -66,16 +69,19 @@ local module = {}
 
 --- @class module_manifest
 --- @field name string
---- @field license string
---- @field author string
---- @field desc string
+--- @field license ?string
+--- @field author ?string
+--- @field desc ?string
 --- @field version string
+--- @field depends ?table
+--- @field path string
+--- @field device_table ?table
 
 -- Kernel Globals
 kernel.mode = {
-    debug = true,
+    debug = debug,
 }
-kernel.ver = "0.1.1-0.craftos"
+kernel.ver = "0.1.2-0.craftos"
 kernel.name = "Prime version "..kernel.ver
 
 kernel.partition = {
@@ -90,7 +96,7 @@ kernel.currentHandling = -1
 kernel.loaded_modules = {}
 
 ---What happened!? ... Yes, the kernel seems to have crashed...
-function panic(message, errors)
+local function panic(message, errors)
     if errors == nil then
         kernel.log("Kernel panic - "..message)
     else
@@ -101,13 +107,19 @@ function panic(message, errors)
     kernel.stop()
 end
 
-function require(...)
-    if not ... then
+local function error(...)
+    local info = bios.debug.getinfo(2, "nS")
+    printf(info.name..": ".. ...)
+    
+end
+
+function kernel.require(modname)
+    if not modname then
         return nil
     end
     local res = kernel.modules
     local normal = false
-    for part in string.gmatch(..., "[^.]+") do
+    for part in string.gmatch(modname, "[^.]+") do
         if res[part] then
             res = res[part]
         else
@@ -115,10 +127,23 @@ function require(...)
         end
     end
     if normal then
-        if setfenv then
-            setfenv(bios.native.require, kernel.env)
+        local file, msg = package.searchpath(modname, package.path)
+        if file == nil then
+            printf(msg)
+            return res
+        else
+            local fun, err = loadfile(file)
+            if fun == nil then
+                panic(err, "Unable to load file")
+            else
+                if setfenv then
+                    setfenv(fun, kernel.env)
+                else
+                    bios.debug.setupvalue(fun, 1, kernel.env)
+                end
+                return fun()
+            end
         end
-        res = require(...)
     end
     return res
 end
@@ -522,30 +547,79 @@ end
 
 -- Module API
 
----@param path string
----@param manifest module_manifest
-function module.load(path, manifest)
-    if kernel.fs.exists(path) then
-        if type(manifest) == "table" then
-            if manifest.name and manifest.desc and manifest.version then
-                
-            else
-                kernel.log("(Module)", "Invalid module manifest")
+---@param name string
+---@
+---@return table|nil
+---@return module_manifest|nil
+function module.load(name)
+    for index, value in ipairs(kernel.loaded_modules) do
+        ---@type module_manifest
+        value.manifest = value.manifest
+        if value.manifest.name == name then
+            if value.manifest.depends ~= nil then
+                for i, v in ipairs(value.manifest.depends) do
+                    module.load(v)
+                end
             end
-        else
-            kernel.log("(Module)", "Invalid module manifest")
+            setfenv(value.init, kernel.env)
+            value.init()
+            return value.main, value.manifest
         end
+    end
+    kernel.log("Module", "Cannot find module '"..name.."'")
+    return nil, nil
+end
+
+---@param main table
+---@param init function
+---@param manifest module_manifest
+function module.register(main, init, manifest)
+    assert(manifest ~= nil, "bad argument #3 to 'register' (table expected, got nil)")
+    assert(type(manifest) == "table", "bad argument #3 to 'register' (table expected, got "..type(manifest)..")")
+    if not (manifest.name and manifest.version and manifest.path) then
+        kernel.log("Module", "Invalid module manifest")
     else
-        kernel.log("(Module)", "No such file")
+        kernel.log("Module", "Loading module: "..manifest.name)
+        table.insert(kernel.loaded_modules, {manifest = manifest, main = main, init = init})
     end
 end
+
+---@param main table
+---@param init function
+---@param manifest module_manifest
+function module.register_autoloader(main, init, manifest)
+    if not (manifest.name and manifest.version and manifest.path) then
+        kernel.log("Module", "Invalid module")
+    else
+        local file = kernel.fs.open("/etc/modules", "r")
+        if file ~= nil then
+            local default = textutils.unserialiseJSON(file.readAll() or "{}")
+            table.insert(default, manifest)
+            file.close()
+            local file = kernel.fs.open("/etc/modules", "w+")
+            if file ~= nil then
+                file.write(textutils.serialiseJSON(default))
+                file.close()
+                table.insert(kernel.loaded_modules, {manifest = manifest, main = main, init = init})
+            end
+        else
+            kernel.log("Module", "Cannot load /etc/modules")
+        end
+    end
+end
+
+function module.autoload()
+    
+end
+
+-- Device API
+
 
 -- Kernel API
 
 function kernel.init()
     --Kernel init
     kernel.fs.delete("/proc/*")
-    kernel.fs.mkdir("/usr/lib/modules/"..kernel.ver.."/kernel/drivers")
     local file = kernel.fs.open("/proc/computerinfo", "w")
     if file ~= nil then
         file.write("Computer Infomation")
@@ -571,9 +645,9 @@ function kernel.init()
     -- Initialize for require
     local lp = kernel.fs.getLocalPath()
     if kernel.mode.debug then
-        package.path = package.path..";"..lp.."/?;"..lp.."/usr/lib/?;"..lp.."/?.lua;"..lp.."/usr/lib/?.lua;"
+        package.path = package.path..";"..lp.."/?;"..lp.."/usr/lib/?;"..lp.."/?.lua;"..lp.."/usr/lib/?.lua;"..lp.."/usr/lib/module/"..kernel.ver.."/?;"..lp.."/usr/lib/module/"..kernel.ver.."/?.lua;"..lp.."/usr/lib/module/"..kernel.ver.."/?.ko;"
     else
-        package.path = lp.."/?;"..lp.."/usr/lib/?;"..lp.."/?.lua;"..lp.."/usr/lib/?.lua;"
+        package.path = lp.."/?;"..lp.."/usr/lib/?;"..lp.."/?.lua;"..lp.."/usr/lib/?.lua;"..lp.."/usr/lib/module/"..kernel.ver.."/?;"..lp.."/usr/lib/module/"..kernel.ver.."/?.lua;"..lp.."/usr/lib/module/"..kernel.ver.."/?.ko;"
     end
     --Setting Env
     ---@class _ENV
@@ -586,19 +660,21 @@ function kernel.init()
         string = string,
 
         printf = printf,
+        printk = kernel.log,
         write = write,
         pairs = pairs,
         ipairs = ipairs,
         tonumber = tonumber,
         tostring = tostring,
-        read = read,
+        error = error,
         pcall = pcall,
         xpcall = xpcall,
         sleep = sleep,
         setmetatable = setmetatable,
         getmetatable = getmetatable,
         next = next,
-        require = require,
+        require = kernel.require,
+        type = type,
 
         _ERR = 0,
     }
@@ -609,6 +685,7 @@ function kernel.init()
             user = user,
             permission = fperm,
             monitor = monitor,
+            module = module,
             ---@class system_info
             system = {
                 ver = kernel.ver,
@@ -638,9 +715,11 @@ function kernel.init()
                     replaceLine = monitor.replaceLine,
                 },
                 key = device.keyboard.keys,
+                driver = {
+                    peripheral = bios.native.peripheral
+                },
             },
-            module = module
-        }
+        },
     }   
 end
 
@@ -703,7 +782,12 @@ function kernel.exec(path, env, nice, arguments)
     if type(arguments) ~= "table" then
         arguments = {}
     end
-    eventsystem.push("kcall_start_process", path, env, nice, table.maxn(kernel.process) + 1, user.getCurrent(), arguments)
+    local pid = table.maxn(kernel.process) + 1
+    if not kernel.fs.exists(path) then
+        kernel.log("Process " .. pid .. " failed to start: No such file")
+    else
+        table.insert(kernel.process, {thread = coroutine.create(bios.native.nativeRun), PID = pid, path = path, nice = nice, env = env, user = user.getCurrent(), arguments = arguments, parent = -1})
+    end
 end
 
 function kernel.killProcess(pid)
@@ -770,7 +854,6 @@ monitor.reset()
 
 kernel.log("Booting "..kernel.name)
 if kernel.mode.debug == true then
-    _debug_mode = true
     kernel.log("Kernel Debug Mode.")
 end
 
@@ -813,20 +896,7 @@ while kernel.running do
             end
         end
     end))
-    if e[1] == "kcall_start_process" then
-        table.remove(e, 1)
-        local path = table.remove(e, 1)
-        local env = table.remove(e, 1)
-        local prio = table.remove(e, 1)
-        local pid = table.remove(e, 1)
-        local user = table.remove(e, 1)
-        local arguments = table.remove(e, 1)
-        if not kernel.fs.exists(path) then
-            kernel.log("Process " .. pid .. " failed to start: No such file")
-        else
-            table.insert(kernel.process, {thread = coroutine.create(bios.native.nativeRun), PID = pid, path = path, nice = prio, env = env, user = user, arguments = arguments, parent = -1})
-        end
-    elseif e[1] == "kcall_kill_process" then
+    if e[1] == "kcall_kill_process" then
         table.remove(e, 1)
         local pid = table.remove(e, 1)
         local remove = -1
@@ -921,7 +991,7 @@ end, bios.debug.traceback)
 
 if not s then
     printf("Kernel has exited on error.", e)
-    if _debug_mode == true then
+    if debug == true then
         local file = bios.native.fs.open("/panic.txt", "w+")
         if file ~= nil then
             file.write(e or "No Error")

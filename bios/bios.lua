@@ -134,6 +134,9 @@ function bios.execute(path)
         setmetatable = setmetatable,
         getmetatable = getmetatable,
         next = next,
+        setfenv = setfenv,
+        assert = assert,
+        loadfile = loadfile,
     }, {})
     if setfenv then
         setfenv(func, env)
