@@ -1,10 +1,10 @@
 ---@type module_manifest
 local manifest = {
-    name = "computercraft_peripherals_driver",
+    name = "peripheral_connect_message",
     version = "0.1.0-craftos",
     path = "kernel/drivers/ccp.ko",
     license = "MIT",
-    desc = "ComputerCraft Generic Peripherals Driver.",
+    desc = "if peripheral connected, outputs peripheral type",
     author = "akki697222"
 }
 local main = {}

@@ -591,6 +591,14 @@ end
 ---@param main table
 ---@param init function
 ---@param manifest module_manifest
+function module.registerAndLoad(main, init, manifest)
+    module.register(main,init,manifest)
+    module.load(manifest.name)
+end
+
+---@param main table
+---@param init function
+---@param manifest module_manifest
 function module.register_autoloader(main, init, manifest)
     if not (manifest.name and manifest.version and manifest.path) then
         kernel.log("Module", "Invalid module")

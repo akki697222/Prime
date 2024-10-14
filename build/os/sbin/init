@@ -24,8 +24,9 @@ end
 --Load drivers
 ---@type table, function, module_manifest
 local main, init, manifest = require("kernel.drivers.ccp")
-module.register(main, init, manifest)
-module.load(manifest.name)
+module.registerAndLoad(main, init, manifest)
+main, init, manifest = require("kernel.drivers.tty")
+module.registerAndLoad(main, init, manifest)
 
 local initver = "0.1.0"
 
