@@ -715,9 +715,9 @@ function kernel.init()
                     replaceLine = monitor.replaceLine,
                 },
                 key = device.keyboard.keys,
-                driver = {
-                    peripheral = bios.native.peripheral
-                },
+            },
+            generic = {
+                peripheral = bios.native.peripheral
             },
         },
     }   
@@ -869,7 +869,7 @@ if new_fs == nil then
         panic("Unhandled error. (Filesystem nil)")
     end
 else
-    ---@type filesystem_handler
+    ---@type filesystem
     kernel.fs = new_fs
 end
 
@@ -890,10 +890,21 @@ while kernel.running do
         kernel.stop()
     end
     table.insert(kernel_threads, coroutine.create(function ()
+        local exits = {}
         for index, value in ipairs(kernel.eventhandlers) do
             if type(value) == "function" then
+                if setfenv then
+                    local nenv = table.deepcopy(kernel.env)
+                    nenv.exit = function ()
+                        table.insert(exits, index)
+                    end
+                    setfenv(value, nenv)
+                end
                 value(table.deepcopy(e))
             end
+        end
+        for index, value in ipairs(exits) do
+            table.remove(kernel.eventhandlers, value)
         end
     end))
     if e[1] == "kcall_kill_process" then
