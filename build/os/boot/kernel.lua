@@ -158,6 +158,10 @@ function eventsystem.pull(filter)
     return bios.native.os.pullEvent(filter)
 end
 
+function eventsystem.get()
+    return bios.native.os.pullEvent("kreturn_handled_event")
+end
+
 function eventsystem.pullRaw(filter)
     return bios.native.os.pullEventRaw(filter)
 end
@@ -993,7 +997,7 @@ while kernel.running do
         kernel.running = false
     end
 
-    eventsystem.push("empty")
+    eventsystem.push("kreturn_handled_event", e)
 end
 
 kernel.stop()
