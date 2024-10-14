@@ -81,7 +81,7 @@ local dev = {}
 kernel.mode = {
     debug = debug,
 }
-kernel.ver = "0.1.2-0.craftos"
+kernel.ver = "0.1.3-0.dev"
 kernel.name = "Prime version "..kernel.ver
 
 kernel.partition = {
