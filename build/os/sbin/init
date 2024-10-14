@@ -6,6 +6,8 @@ local system = require("system.system")
 local printutils = require("system.util.print")
 ---@type module
 local module = require("system.module")
+---@type multitask
+local thread = require("system.thread")
 
 local initlog = {}
 function initlog.ok(...)
@@ -41,4 +43,5 @@ initlog.log("LOG")
 
 while true do
     coroutine.yield()
+    
 end

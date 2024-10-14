@@ -46,6 +46,8 @@ local fperm = {}
 local module = {}
 ---@class device
 local dev = {}
+---@class multitask
+local thread = {}
 
 --- @class process_data
 --- @field thread thread
@@ -81,7 +83,7 @@ local dev = {}
 kernel.mode = {
     debug = debug,
 }
-kernel.ver = "0.1.2-0.craftos"
+kernel.ver = "0.1.3-0.dev"
 kernel.name = "Prime version "..kernel.ver
 
 kernel.partition = {
@@ -129,7 +131,8 @@ function kernel.require(modname)
     if normal then
         local file, msg = package.searchpath(modname, package.path)
         if file == nil then
-            printf(msg)
+            printf("require: No such file")
+            printf("  "..msg)
             return res
         else
             local fun, err = loadfile(file)
@@ -545,6 +548,39 @@ function timeapi.date(format, time)
     return bios.date(format, time)
 end
 
+-- Thread API
+
+function thread.runAny(...)
+    local args = {...}
+    for index, value in ipairs(args) do
+        if type(value) ~= "function" then
+            printf("Cannot run thread: not function")
+            return
+        end
+    end
+    local coro = {}
+    for index, value in ipairs(args) do
+        table.insert(coro, coroutine.create(value))
+    end
+    local pid = kernel.fork()
+    if pid == 0 then
+        while true do
+            local rm = {}
+            for index, value in ipairs(coro) do
+                if coroutine.status(value) == "dead" then
+                    table.insert(rm, index)
+                else
+                    coroutine.resume(value)
+                end
+            end
+            for index, value in ipairs(rm) do
+                table.remove(coro, value)
+            end
+            coroutine.yield()
+        end
+    end
+end
+
 -- Module API
 
 ---@param name string
@@ -678,6 +714,9 @@ function kernel.init()
 
         _ERR = 0,
     }
+    local newmod = {
+        
+    }
     ---@class modules
     kernel.modules = {
         ---@class system
@@ -703,6 +742,7 @@ function kernel.init()
                 get = kernel.getCurrentProcess,
                 kill = kernel.killProcess,
             },
+            thread = thread,
             ---@class util
             util = {
                 date = timeapi,
@@ -714,11 +754,11 @@ function kernel.init()
                     colorPrint = monitor.colorPrint,
                     replaceLine = monitor.replaceLine,
                 },
-                key = device.keyboard.keys,
-                driver = {
-                    peripheral = bios.native.peripheral
-                },
             },
+            generic = {
+                peripheral = bios.native.peripheral,
+                keys = device.keyboard.keys,
+            }
         },
     }   
 end
@@ -786,7 +826,7 @@ function kernel.exec(path, env, nice, arguments)
     if not kernel.fs.exists(path) then
         kernel.log("Process " .. pid .. " failed to start: No such file")
     else
-        table.insert(kernel.process, {thread = coroutine.create(bios.native.nativeRun), PID = pid, path = path, nice = nice, env = env, user = user.getCurrent(), arguments = arguments, parent = -1})
+        table.insert(kernel.process, {thread = coroutine.create(bios.native.nativeRun), PID = pid, path = path, nice = nice, env = env, user = user.getData(user.getCurrent()).name, arguments = arguments, parent = -1})
     end
 end
 
@@ -982,7 +1022,7 @@ while kernel.running do
         kernel.running = false
     end
 
-    eventsystem.push("empty")
+    eventsystem.push("resume")
 end
 
 kernel.stop()
