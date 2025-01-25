@@ -1,0 +1,15 @@
+---@type module_manifest
+local manifest = {
+    name = "kernel.drivers.tty.vt",
+    version = "0.1.3-0.dev",
+    path = "kernel/drivers/tty/vt/vt",
+    depends = { "kernel.drivers.tty" }
+}
+
+local vt = {}
+
+local function init()
+
+end
+
+return vt, init, manifest

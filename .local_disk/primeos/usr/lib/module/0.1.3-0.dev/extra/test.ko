@@ -2,7 +2,7 @@
 local manifest = {
     name = "peripheral_connect_message",
     version = "0.1.0-craftos",
-    path = "kernel/drivers/ccp.ko",
+    path = "extra/test",
     license = "MIT",
     desc = "if peripheral connected, outputs peripheral type",
     author = "akki697222"

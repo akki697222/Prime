@@ -1,0 +1,20 @@
+.../kernel/drivers/tty/tty.ko:446: attempt to index local 'env' (a nil value)
+stack traceback:
+	.../kernel/drivers/tty/tty.ko:446: in function 'init'
+	...nt/primeos/boot/kernel.lua:646: in function 'registerModule'
+	...nt/primeos/boot/kernel.lua:664: in function 'autoload'
+	...nt/primeos/boot/kernel.lua:784: in function 'init'
+	...nt/primeos/boot/kernel.lua:941: in function <...nt/primeos/boot/kernel.lua:3>
+	[C]: in function 'xpcall'
+	...nt/primeos/boot/kernel.lua:3: in function 'func'
+	/bios/bios.lua:154: in function 'execute'
+	...disk/primeos/boot/boot.lua:8: in function 'func'
+	/bios/bios.lua:154: in function 'execute'
+	.../bootsector/bootloader.lua:22: in function 'drawEntry'
+	.../bootsector/bootloader.lua:30: in function 'func'
+	/bios/bios.lua:154: in function 'execute'
+	/bios/bios.lua:63: in function 'post'
+	/bios/bios.lua:72: in function 'run'
+	/runos.lua:81: in function </runos.lua:80>
+	[C]: in function 'xpcall'
+	/runos.lua:80: in main chunk

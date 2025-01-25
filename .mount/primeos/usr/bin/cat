@@ -1,0 +1,9 @@
+local args = {...}
+local fs = require("system.filesystem")
+local file = fs.open(fs.combine("/", args[1]), "r")
+if not file then
+    printf("cat: File not found")
+else
+    printf(file.readAll())
+    file.close()
+end

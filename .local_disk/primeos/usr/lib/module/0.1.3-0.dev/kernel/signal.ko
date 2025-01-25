@@ -1,0 +1,127 @@
+---@type module_manifest
+local manifest = {
+    name = "kernel.signal",
+    version = "0.1.3-0.dev",
+    path = "kernel/signal",
+    depends = { "kernel.process" }
+}
+
+local signal = {}
+
+-- シグナル定義
+signal.SIGHUP    = 1  -- 端末切断
+signal.SIGINT    = 2  -- 割り込み
+signal.SIGQUIT   = 3  -- 終了とコアダンプ
+signal.SIGILL    = 4  -- 不正命令
+signal.SIGABRT   = 6  -- プロセス異常終了
+signal.SIGFPE    = 8  -- 浮動小数点例外
+signal.SIGKILL   = 9  -- 強制終了
+signal.SIGSEGV   = 11 -- セグメンテーション違反
+signal.SIGPIPE   = 13 -- パイプ破損
+signal.SIGALRM   = 14 -- タイマー
+signal.SIGTERM   = 15 -- 終了要求
+signal.SIGCHLD   = 17 -- 子プロセス停止/終了
+signal.SIGCONT   = 18 -- 実行再開
+signal.SIGSTOP   = 19 -- 一時停止
+signal.SIGTSTP   = 20 -- 端末からの一時停止
+signal.SIGTTIN   = 21 -- バックグラウンド読み込み
+signal.SIGTTOU   = 22 -- バックグラウンド書き込み
+signal.SIGWINCH  = 28 -- ウィンドウサイズ変更
+
+-- シグナルハンドラテーブル
+local signal_handlers = {}
+
+-- デフォルトのシグナルハンドラ
+local function create_default_handlers(env)
+    local process = env.modules["kernel.process"]
+    return {
+        [signal.SIGTERM] = function(pid)
+            process.terminate(pid)
+        end,
+        [signal.SIGKILL] = function(pid)
+            process.terminate(pid, true)  -- 強制終了
+        end,
+        [signal.SIGSTOP] = function(pid)
+            process.suspend(pid)
+        end,
+        [signal.SIGCONT] = function(pid)
+            process.resume(pid)
+        end
+    }
+end
+
+-- シグナルハンドラの登録
+---@param sig number
+---@param handler function
+---@param pid number
+function signal.register_handler(sig, handler, pid)
+    if not signal_handlers[pid] then
+        signal_handlers[pid] = {}
+    end
+    signal_handlers[pid][sig] = handler
+end
+
+-- シグナルの送信
+---@param pid number
+---@param sig number
+---@param env table
+function signal.kill(pid, sig, env)
+    local process = env.modules["kernel.process"]
+    
+    -- プロセスの存在確認
+    if not process.exists(pid) then
+        return false, "Process does not exist"
+    end
+    
+    -- シグナルハンドラの取得と実行
+    local handler = signal_handlers[pid] and signal_handlers[pid][sig]
+    if handler then
+        handler(pid)
+    else
+        local default_handlers = create_default_handlers(env)
+        if default_handlers[sig] then
+            default_handlers[sig](pid)
+        end
+    end
+    
+    return true
+end
+
+-- プロセスグループへのシグナル送信
+---@param pgid number
+---@param sig number
+---@param env table
+function signal.killpg(pgid, sig, env)
+    local process = env.modules["kernel.process"]
+    
+    -- プロセスグループ内の全プロセスにシグナルを送信
+    local processes = process.get_group_processes(pgid)
+    for _, pid in ipairs(processes) do
+        signal.kill(pid, sig, env)
+    end
+end
+
+-- シグナルマスクの設定
+---@param pid number
+---@param mask table
+function signal.set_mask(pid, mask)
+    if not signal_handlers[pid] then
+        signal_handlers[pid] = {}
+    end
+    signal_handlers[pid].mask = mask
+end
+
+-- シグナルマスクの取得
+---@param pid number
+---@return table
+function signal.get_mask(pid)
+    return signal_handlers[pid] and signal_handlers[pid].mask or {}
+end
+
+-- 初期化関数
+---@param env table
+local function init(env)
+    printf("signal: initialized")
+end
+
+return signal, init, manifest

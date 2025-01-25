@@ -10,17 +10,19 @@ local requires = {
 }
 local part = require("bios.partition")
 local w, h = term.getSize()
-local bios = {native = {
-    term = term,
-    fs = fs,
-    require = require,
-    dofile = dofile,
-    loadfile = loadfile,
-    parallel = parallel,
-    peripheral = peripheral,
-    read = read,
-    os = os,
-}}
+local bios = {
+    native = {
+        term = term,
+        fs = fs,
+        require = require,
+        dofile = dofile,
+        loadfile = loadfile,
+        parallel = parallel,
+        peripheral = peripheral,
+        read = read,
+        os = os,
+    }
+}
 
 function bios.init()
     part.init()
@@ -45,6 +47,15 @@ function bios.post()
     else
         term.setCursorBlink(true)
     end
+    parallel.waitForAny(function()
+        local event, key = os.pullEvent("key")
+        if (key == keys.enter) then
+            print("Entering BIOS...")
+            
+        end
+    end, function()
+        sleep(3)
+    end)
     print("Booting from Storage...")
     if not fs.exists(part.directories.disk .. "bootsector/bootloader.lua") then
         print("Failed to boot: bootsector is not exists.")
@@ -144,13 +155,13 @@ function bios.execute(path)
     elseif _VERSION == "Lua 5.2" then
         _ENV = env
         local func, err
-        local s, e = pcall(function ()
+        local s, e = pcall(function()
             func, err = load(path, path)
         end)
         if not func or not s then
             return false, err
         end
-        local s, e = pcall(function ()
+        local s, e = pcall(function()
             func()
         end)
         if not s then
@@ -158,13 +169,13 @@ function bios.execute(path)
         end
     else
         local func, err
-        local s, e = pcall(function ()
+        local s, e = pcall(function()
             func, err = loadfile(path, "t", env)
         end)
         if not func or not s then
             return false, err
         end
-        local s, e = pcall(function ()
+        local s, e = pcall(function()
             func()
         end)
         if not s then
@@ -180,7 +191,7 @@ function bios.loadfile(path, _env, _metatable)
     local env = setmetatable(_env, _metatable)
     if setfenv then
         local func, err
-        local s, e = pcall(function ()
+        local s, e = pcall(function()
             func, err = loadfile(path)
         end)
         if not func or func == nil then
@@ -191,13 +202,13 @@ function bios.loadfile(path, _env, _metatable)
     elseif _VERSION == "Lua 5.2" then
         _ENV = env
         local func, err
-        local s, e = pcall(function ()
+        local s, e = pcall(function()
             func, err = loadfile(path, "t", env)
         end)
         return func, err
     else
         local func, err
-        local s, e = pcall(function ()
+        local s, e = pcall(function()
             func, err = loadfile(path, "t", env)
         end)
         return func, err

@@ -1,0 +1,10 @@
+---@type process
+local process = require("system.process")
+
+local pid = process.fork()
+
+if pid == 0 then
+    printf("Child")
+else
+    printf("Parent")
+end
