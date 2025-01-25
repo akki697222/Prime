@@ -1,8 +1,0 @@
-if type(printf) ~= "function" then error("Not Prime") return end
-local process = require("system.process")
-local printutils = require("system.util.print")
-local printtable = {{"USER", "PID", "STAT", "COMMAND"}}
-for index, value in ipairs(process.getTable()) do
-    table.insert(printtable, {value.user, value.PID, coroutine.status(value.co), value.path})
-end
-printutils.printOutput(printtable)
