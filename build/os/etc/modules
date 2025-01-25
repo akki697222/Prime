@@ -8,8 +8,8 @@
         "author":"akki697222"
     },
     {
-        "name":"keyboard",
+        "name":"tty",
         "version":"0.1.0",
-        "path":"kernel/drivers/input/keyboard"
+        "path":"kernel/drivers/tty/tty"
     }
 ]

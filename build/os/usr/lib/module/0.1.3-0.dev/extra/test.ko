@@ -11,7 +11,7 @@ local main = {}
 local function start()
     ---@type eventsystem
     local eventsystem = require("system.event")
-    local peripheral = require("system.generic.peripheral")
+    local peripheral = require("system.internal.peripheral")
     local function eventhandler(event)
         if event[1] == "peripheral" then
             table.remove(event, 1)

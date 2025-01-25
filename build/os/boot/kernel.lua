@@ -31,7 +31,7 @@ function table.deepcopy(orig, copies)
 end
 
 ---@class kernel
-local kernel = {}
+local kernel = {boottime = bios.epoch(), tty = nil}
 ---@class date
 local timeapi = {}
 ---@class eventsystem
@@ -67,6 +67,7 @@ local io = {}
 --- @field user string
 --- @field arguments table
 --- @field parent integer
+--- @field fd table<stdout|stdin|stderr|file>
 
 --- @class single_permission_table
 --- @field r boolean
@@ -102,10 +103,15 @@ kernel.partition = {
 kernel.running = true
 kernel.process = {}
 kernel.eventhandlers = {}
+kernel.singleeventhandlers = {}
 kernel.user = {}
 kernel.currentHandling = -1
 kernel.loaded_modules = {}
 kernel.threads = 0
+
+local function printk(...) 
+    printf(...)
+end
 
 ---What happened!? ... Yes, the kernel seems to have crashed...
 local function panic(message, errors)
@@ -175,7 +181,23 @@ end
 ---@param func function
 function eventsystem.addEventHandler(func)
     if type(func) == "function" then
-        table.insert(kernel.eventhandlers, func)
+        table.insert(kernel.eventhandlers, {func = func, isSingle = false, filter = nil})
+    else
+        kernel.log("EventSystem", "Invalid Function")
+    end
+end
+
+function eventsystem.addSingleEventHandler(func)
+    if type(func) == "function" then
+        table.insert(kernel.eventhandlers, {func = func, isSingle = true, filter = nil})
+    else
+        kernel.log("EventSystem", "Invalid Function")
+    end
+end
+
+function eventsystem.addSingleFilteredEventHandler(filter, func)
+    if type(func) == "function" then
+        table.insert(kernel.eventhandlers, {func = func, isSingle = true, filter = filter})
     else
         kernel.log("EventSystem", "Invalid Function")
     end
@@ -674,10 +696,6 @@ function module.autoload()
     end
 end
 
--- Standard Library
-
-
-
 -- Device API
 
 
@@ -738,6 +756,9 @@ function kernel.init()
         next = next,
         require = kernel.require,
         type = type,
+        terminal = function () 
+            return kernel.tty
+        end,
 
         _ERR = 0,
     }
@@ -781,26 +802,35 @@ function kernel.init()
                     replaceLine = monitor.replaceLine,
                 },
             },
-            generic = {
+            internal = {
                 keys = device.keyboard.keys,
                 peripheral = bios.native.peripheral
             },
             kernel = {
                 createThread = kernel.addThread
             }
-        },
+        }
     }  
     --Module initialize
     fperm.init()
     user.init()
     module.autoload()
+    -- tty
+    ---@type tty_mod
+    local tty = module.load("tty")
+    kernel.tty = tty.create(0)
+    kernel.modules.io = {
+        stdin = tty.stdin.new(),
+        stdout = tty.stdout.new(),
+        stderr = tty.stderr.new()
+    }
 end
 
 function kernel.log(vendor, ...)
     if not ... then
-        printf("["..bios.uptime().."] ".. vendor)
+        printf("["..(bios.epoch() - kernel.boottime) / 1000 .."] ".. vendor)
     else
-        printf("["..bios.uptime().."] ("..vendor..") ".. ...)
+        printf("["..(bios.epoch() - kernel.boottime) / 1000 .."] ("..vendor..") ".. ...)
     end
 end
 
@@ -812,7 +842,8 @@ end
 function kernel.continue(thread)
     assert(thread ~= nil)
     if coroutine.status(thread.co) ~= "dead" then
-        coroutine.resume(thread.co)
+        thread.resumes = thread.resumes + 1
+        return coroutine.resume(thread.co)
     end
 end
 
@@ -833,7 +864,8 @@ function kernel.fork()
         env = table.deepcopy(kernel.env),
         user = user.getData(user.getCurrent()).name,
         arguments = {},
-        parent = kernel.currentHandling
+        parent = kernel.currentHandling,
+        fd = {}
     }
     
     table.insert(kernel.process, new_process)
@@ -867,6 +899,7 @@ function kernel.thread(fun)
         id = kernel.threads + 1,
         resumes = 0
     }
+    table.insert(kernel.getProcessFromPID(kernel.currentHandling).threads, newThread)
     return newThread 
 end
 
@@ -888,7 +921,18 @@ function kernel.exec(path, env, nice, arguments)
     if not kernel.fs.exists(path) then
         kernel.log("Process " .. pid .. " failed to start: No such file")
     else
-        table.insert(kernel.process, {threads = {}, co = coroutine.create(bios.native.nativeRun), PID = pid, path = path, nice = nice, env = env, user = user.getCurrent(), arguments = arguments, parent = -1})
+        table.insert(kernel.process, {
+            threads = {},
+            co = coroutine.create(bios.native.nativeRun),
+            PID = pid,
+            path = path,
+            nice = nice,
+            env = env,
+            user = user.getCurrent(),
+            arguments = arguments,
+            parent = -1,
+            fd = {}
+        })
     end
 end
 
@@ -999,23 +1043,39 @@ function kernel.addThread(func)
 end
 while kernel.running do 
     local e = {bios.pullEventRaw()}
+    local eventName = e[1]
     --local pp = bios.native.require("cc.pretty")
     --pp.pretty_print(e)
     if e[1] == "terminate" or e[1] == "kernel_exit" then
         kernel.stop()
     end
+
     table.insert(kernel_threads, coroutine.create(function ()
         local exits = {}
         for index, value in ipairs(kernel.eventhandlers) do
-            if type(value) == "function" then
+            if type(value.func) == "function" then
                 if setfenv then
                     local nenv = table.deepcopy(kernel.env)
                     nenv.exit = function ()
                         table.insert(exits, index)
                     end
-                    setfenv(value, nenv)
+                    setfenv(value.func, nenv)
                 end
-                value(table.deepcopy(e))
+                if value.filter then
+                    if value.filter == eventName then
+                        if value.isSingle then
+                            table.insert(exits, index)
+                            value.func(table.deepcopy(e))
+                        else
+                            value.func(table.deepcopy(e))
+                        end
+                    end
+                elseif value.isSingle then
+                    table.insert(exits, index)
+                    value.func(table.deepcopy(e))
+                else
+                    value.func(table.deepcopy(e))
+                end
             end
         end
         for index, value in ipairs(exits) do

@@ -6,19 +6,21 @@ local system = require("system.system")
 local printutils = require("system.util.print")
 ---@type module
 local module = require("system.module")
+---@type stdin
+local stdin = require("io.stdin")
 
 local initlog = {}
 function initlog.ok(...)
-    printutils.colorPrint(" ( &5OK&0 )  ".. ...)
+    printutils.colorPrint(" ( &5OK&0 )  ".. tostring(...))
 end
 function initlog.fail(...)
-    printutils.colorPrint(" (&eFAIL&0)  ".. ...)
+    printutils.colorPrint(" (&eFAIL&0)  ".. tostring(...))
 end
 function initlog.warn(...)
-    printutils.colorPrint(" (&1WARN&0)  ".. ...)
+    printutils.colorPrint(" (&1WARN&0)  ".. tostring(...))
 end
 function initlog.log(...)
-    printutils.colorPrint("         ".. ...)
+    printutils.colorPrint("         ".. tostring(...))
 end
 
 local initver = "0.1.0"
@@ -30,11 +32,11 @@ initlog.fail("FAIL")
 initlog.warn("WARN")
 initlog.log("LOG")
 
-local thread = process.thread(function ()
-    printf("Test")
-end)
-process.continue(thread)
-
 process.exec("/usr/bin/ls", nil, nil, {"-al"})
 process.exec("/usr/bin/ps")
-process.exec("/usr/bin/processtest")
+
+printf("Successfully executed read! result: " .. stdin:read())
+
+while true do
+    coroutine.yield()
+end
