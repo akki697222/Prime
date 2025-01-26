@@ -36,10 +36,12 @@ initlog.fail("FAIL")
 initlog.warn("WARN")
 initlog.log("LOG")
 
-printf("Successfully executed read! result: " .. stdin:read())
 printf(fs.cwd())
 fs.chdir("/usr/bin")
 printf(fs.cwd())
+
+initlog.log("Run /usr/bin/sh :")
+process.exec("/usr/bin/sh")
 
 while true do
     coroutine.yield()
