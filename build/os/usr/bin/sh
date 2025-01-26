@@ -15,11 +15,37 @@ local printutils = require("system.util.print")
 ---@type process
 local process = require("system.process")
 
-while true do
-    stdout:write("&4$&0 ")
-    local value = stdin:read();
-    local path = fs.cwd() .. "/" .. value;
-    if fs.exists(path) then
-        process.exec(path)
+local function waitExec(path)
+    while true do
+        for index, value in ipairs(process.getTable()) do
+            if value.path == path then
+                sleep(1)
+                return;
+            end
+        end
     end
 end
+
+local function ps_modoki()
+    local printtable = { {  "STAT", "COMMAND" } }
+    for index, value in ipairs(process.getTable()) do
+        table.insert(printtable, {  coroutine.status(value.co), value.path })
+    end
+    printutils.printOutput(printtable)
+end
+
+local function shellMain()
+    while true do
+        stdout:write("&4$&0 ")
+        local value = stdin:read();
+        local path = fs.cwd() .. "/" .. value;
+        if fs.exists(path) and #value ~= 0 then
+            printf("found")
+            process.exec(path, nil, "nice")
+        end
+        ps_modoki()
+    end
+end
+
+shellMain();
+printf("????????????")
