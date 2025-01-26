@@ -34,5 +34,6 @@
     ],
     "Lua.workspace.library": [
         "bios/global"
-    ]
+    ],
+    "editor.formatOnSave": false
 }
