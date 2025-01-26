@@ -13,13 +13,13 @@ local eventsystem = require("system.event")
 
 local initlog = {}
 function initlog.ok(...)
-    printf(" ( OK )  ".. tostring(...))
+    printf(" ( &5OK&0 )  ".. tostring(...))
 end
 function initlog.fail(...)
-    printf(" (FAIL)  ".. tostring(...))
+    printf(" (&eFAIL&0)  ".. tostring(...))
 end
 function initlog.warn(...)
-    printf(" (WARN)  ".. tostring(...))
+    printf(" (&1WARN&0)  ".. tostring(...))
 end
 function initlog.log(...)
     printf("         ".. tostring(...))
@@ -33,9 +33,6 @@ initlog.ok("OK")
 initlog.fail("FAIL")
 initlog.warn("WARN")
 initlog.log("LOG")
-
-process.exec("/usr/bin/ls", nil, nil, {"-al"})
-process.exec("/usr/bin/ps")
 
 printf("Successfully executed read! result: " .. stdin:read())
 

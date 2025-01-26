@@ -1,6 +1,7 @@
-...nt/primeos/boot/kernel.lua:1244: attempt to concatenate local 'e' (a nil value)
+...nt/primeos/boot/kernel.lua:922: attempt to index a nil value
 stack traceback:
-	...nt/primeos/boot/kernel.lua:1244: in function <...nt/primeos/boot/kernel.lua:3>
+	...nt/primeos/boot/kernel.lua:922: in function 'init'
+	...nt/primeos/boot/kernel.lua:1142: in function <...nt/primeos/boot/kernel.lua:3>
 	[C]: in function 'xpcall'
 	...nt/primeos/boot/kernel.lua:3: in function 'func'
 	/bios/bios.lua:154: in function 'execute'

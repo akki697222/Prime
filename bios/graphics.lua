@@ -106,4 +106,6 @@ function graphics.getPosition()
     return term.getCursorPos()
 end
 
+graphics.colors = colors
+
 return graphics

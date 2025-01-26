@@ -183,6 +183,21 @@ function printf(...)
     end
 end
 
+function error(message)
+    local stderr = kernel.modules.io.stderr
+    if stderr then
+        stderr:write(message .. "\n")
+    else
+        fb.write(message .. "\n")
+        for index, value in ipairs(fb.buffer) do
+            monitor.setPosition(1, index)
+            monitor.write(string.rep(" ", fb.window.width))
+            monitor.setPosition(1, index)
+            monitor.write(value)
+        end
+    end
+end
+
 ---What happened!? ... Yes, the kernel seems to have crashed...
 local function panic(message, errors)
     if errors == nil then
@@ -860,6 +875,7 @@ function kernel.init()
             process = {
                 fork = kernel.fork,
                 exec = kernel.exec,
+                execve = kernel.execve,
                 getTable = kernel.getProcess,
                 getProcess = kernel.getProcessFromPID,
                 get = kernel.getCurrentProcess,
@@ -879,6 +895,7 @@ function kernel.init()
                     colorPrint = monitor.colorPrint,
                     replaceLine = monitor.replaceLine,
                 },
+                colors = monitor.colors
             },
             internal = {
                 keys = device.keyboard.keys,
@@ -903,6 +920,7 @@ function kernel.init()
     kernel.tty.current = 1
     local width, height = monitor.size()
     kernel.getTTY():transfer(fb.buffer, fb.window.x, fb.window.y, width, height)
+    kernel.getTTY():setColorMode(true)
     kernel.modules.io = {
         stdin = tty.stdin.new(),
         stdout = tty.stdout.new(),

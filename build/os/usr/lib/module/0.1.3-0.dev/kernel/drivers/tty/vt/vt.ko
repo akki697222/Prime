@@ -22,7 +22,9 @@ function vt.create(id)
         width = 80,
         height = 24,
         scroll = 0,
-        buffer = {}
+        buffer = {},
+        color = false,
+        cursorblink = false
     }
     for i = 1, window.height do
         window.buffer[i] = string.rep(" ", window.width)
@@ -58,9 +60,40 @@ function vt.create(id)
                 monitor.setPosition(1, index - window.scroll)
                 monitor.write(string.rep(" ", window.width))
                 monitor.setPosition(1, index - window.scroll)
-                monitor.write(value)
+                local text = tostring(value)
+                local skip = false
+                for i = 1, #text do
+                    local char = text:sub(i, i)
+
+                    if skip then
+                        skip = false
+                        goto continue
+                    end
+
+                    if char == "&" then
+                        if window.color then
+                            local nextChar = text:sub(i + 1, i + 1)
+                            if nextChar:match("%x") then
+                                monitor.setTextColor(monitor.colors.fromBlit(tostring(nextChar)))
+                                skip = true
+                            elseif nextChar == "r" then
+                                monitor.setTextColor(monitor.colors.white)
+                                skip = true
+                            end
+                        else
+                            skip = true
+                        end
+                    else
+                        monitor.write(char)
+                    end
+                    ::continue::
+                end
             end
             parentBuffer = table.deepcopy(window.buffer)
+        end
+        if window.cursorblink then
+            monitor.setPosition(window.x, window.y)
+            monitor.write("_")
         end
     end)
     ---@class vt
@@ -71,12 +104,12 @@ function vt.create(id)
     end
 
     function obj:transfer(new_buffer, x, y, width, height)
-        window.buffer = new_buffer
         window.x = x
         window.y = y
         window.scroll = 0
         window.width = width
         window.height = height
+        window.buffer = new_buffer
     end
 
     function obj:write(...)
@@ -115,7 +148,7 @@ function vt.create(id)
     function obj:scroll()
         window.scroll = window.scroll + 1
     end
-    
+
     function obj:clear()
         for i = 1, window.height do
             window.buffer[i] = string.rep(" ", window.width)
@@ -131,11 +164,18 @@ function vt.create(id)
         end
     end
 
+    function obj:setColorMode(state)
+        window.color = state and true or false
+    end
+
+    function obj:setBlink(state)
+        window.cursorblink = state and true or false
+    end
+
     return obj
 end
 
 function init()
-    printf("VT Init called")
 end
 
 return vt, init, manifest

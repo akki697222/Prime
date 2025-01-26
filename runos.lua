@@ -86,6 +86,7 @@ if not s then
     print(e)
 end
 
+print()
 print("Test ended. Press any key to continue.")
 os.pullEvent("key")
 
