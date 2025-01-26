@@ -68,6 +68,7 @@ local io = {}
 --- @field arguments table
 --- @field parent integer
 --- @field fd table<stdout|stdin|stderr|file>
+--- @field cwd string
 
 --- @class single_permission_table
 --- @field r boolean
@@ -484,6 +485,14 @@ end
 
 function userfs.isDir(path)
     return kernel.fs.isDir(path)
+end
+
+function userfs.chdir(path)
+    kernel.getSelf().cwd = tostring(path)
+end
+
+function userfs.cwd()
+    return kernel.getSelf().cwd
 end
 
 -- File permission API
@@ -980,7 +989,8 @@ function kernel.fork()
         user = user.getData(user.getCurrent()).name,
         arguments = {},
         parent = kernel.currentHandling,
-        fd = {}
+        fd = {},
+        cwd = kernel.fs.getDir(info.source)
     }
     
     table.insert(kernel.process, new_process)
@@ -1046,7 +1056,8 @@ function kernel.exec(path, env, nice, arguments)
             user = user.getCurrent(),
             arguments = arguments,
             parent = -1,
-            fd = {}
+            fd = {},
+            cwd = kernel.fs.getDir(path)
         })
     end
 end
@@ -1062,6 +1073,15 @@ end
 function kernel.getProcessFromPID(pid)
     for index, value in ipairs(kernel.process) do
         if value.PID == pid then
+            return value, index
+        end
+    end
+    return nil, -1
+end
+
+function kernel.getSelf()
+    for index, value in ipairs(kernel.process) do
+        if value.PID == kernel.currentHandling then
             return value, index
         end
     end
@@ -1249,6 +1269,7 @@ while kernel.running do
                             file.write("\nPath: "..value.path)
                             file.write("\nPID: "..value.PID)
                             file.write("\nUser: "..value.user)
+                            file.write("\nCurrent Working Directory: "..value.cwd)
                             file.close()
                         end
                         local s, e = coroutine.resume(value.co, value.env, kernel.fs.combine(kernel.fs.getLocalPath(), value.path), table.unpack(value.arguments))

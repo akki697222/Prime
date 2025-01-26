@@ -10,6 +10,8 @@ local stdin = require("io.stdin")
 local stdout = require("io.stdout")
 ---@type eventsystem
 local eventsystem = require("system.event")
+---@type filesystem
+local fs = require("system.filesystem")
 
 local initlog = {}
 function initlog.ok(...)
@@ -35,6 +37,9 @@ initlog.warn("WARN")
 initlog.log("LOG")
 
 printf("Successfully executed read! result: " .. stdin:read())
+printf(fs.cwd())
+fs.chdir("/usr/bin")
+printf(fs.cwd())
 
 while true do
     coroutine.yield()
