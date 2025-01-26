@@ -1,0 +1,25 @@
+---@type stdin
+local stdin = require("io.stdin")
+---@type stdout
+local stdout = require("io.stdout")
+---@type user
+local user = require("system.user")
+---@type filesystem
+local fs = require("system.filesystem")
+---@type date
+local date = require("system.util.date")
+---@type permission
+local permission = require("system.permission")
+---@type printUtils
+local printutils = require("system.util.print")
+---@type process
+local process = require("system.process")
+
+while true do
+    stdout:write("&4$&0 ")
+    local value = stdin:read();
+    local path = fs.cwd() .. "/" .. value;
+    if fs.exists(path) then
+        process.exec(path)
+    end
+end
