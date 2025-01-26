@@ -123,6 +123,14 @@ function vt.create(id)
         window.x, window.y = 1, 1
     end
 
+    function obj:removeBack()
+        if window.x > 1 then
+            local currentLine = window.buffer[window.y]
+            window.buffer[window.y] = currentLine:sub(1, window.x - 2) .. currentLine:sub(window.x)
+            window.x = window.x - 1
+        end
+    end
+
     return obj
 end
 

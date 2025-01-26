@@ -7,7 +7,8 @@ local manifest = {
 }
 
 local specials = {
-    enter = 28
+    enter = 28,
+    backspace = 14,
 }
 
 ---@class tty_mod
@@ -33,7 +34,11 @@ function _tty.create(id)
         if event[1] == "key" then
             --printf("tty" .. tty.id .. " Key Pressed: " .. keys.getName(event[2]) .. " Raw: " .. event[2])
             if tty.reading and event[2] == specials.enter and tty.flags.canonical then
+                terminal():write("\n")
                 tty.reading = false
+            elseif tty.reading and event[2] == specials.backspace and tty.flags.canonical then
+                terminal():removeBack()
+                tty.buffer = tty.buffer:sub(1, -2)
             end
             if not tty.flags.canonical then
                 tty:rawInput(event[2])
@@ -42,6 +47,7 @@ function _tty.create(id)
         elseif event[1] == "char" then
             --printf("tty" .. tty.id .. " Key Pressed (Char) " .. event[2])
             if tty.flags.canonical then
+                terminal():write(event[2])
                 tty:write(event[2])
             end
         end
