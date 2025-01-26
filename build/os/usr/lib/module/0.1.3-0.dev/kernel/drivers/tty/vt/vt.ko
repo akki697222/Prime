@@ -29,6 +29,8 @@ function vt.create(id)
     for i = 1, window.height do
         window.buffer[i] = string.rep(" ", window.width)
     end
+    ---@class vt
+    local obj = {}
     ---@type graphics
     local monitor = require("system.monitor")
     ---@type eventsystem
@@ -40,11 +42,22 @@ function vt.create(id)
     ---@type tty
     local _tty = tty.create(id)
     local parentBuffer = window.buffer
+    local oldCX, oldCY = window.x, window.y
     eventsystem.addEventHandler(function(event)
         if event[1] == "key" then
 
         elseif event[1] == "char" then
 
+        end
+
+        if window.cursorblink then
+            if window.x ~= oldCX or window.y ~= oldCY then
+                obj:update()
+                oldCX = window.x
+                oldCY = window.y
+            end
+            monitor.setPosition(window.x, window.y)
+            monitor.write("_")
         end
 
         local hasChanges = false
@@ -56,48 +69,9 @@ function vt.create(id)
         end
 
         if hasChanges then
-            for index, value in ipairs(window.buffer) do
-                monitor.setPosition(1, index - window.scroll)
-                monitor.write(string.rep(" ", window.width))
-                monitor.setPosition(1, index - window.scroll)
-                local text = tostring(value)
-                local skip = false
-                for i = 1, #text do
-                    local char = text:sub(i, i)
-
-                    if skip then
-                        skip = false
-                        goto continue
-                    end
-
-                    if char == "&" then
-                        if window.color then
-                            local nextChar = text:sub(i + 1, i + 1)
-                            if nextChar:match("%x") then
-                                monitor.setTextColor(monitor.colors.fromBlit(tostring(nextChar)))
-                                skip = true
-                            elseif nextChar == "r" then
-                                monitor.setTextColor(monitor.colors.white)
-                                skip = true
-                            end
-                        else
-                            skip = true
-                        end
-                    else
-                        monitor.write(char)
-                    end
-                    ::continue::
-                end
-            end
-            parentBuffer = table.deepcopy(window.buffer)
-        end
-        if window.cursorblink then
-            monitor.setPosition(window.x, window.y)
-            monitor.write("_")
+            obj:update()
         end
     end)
-    ---@class vt
-    local obj = {}
 
     function obj:getTTY()
         return _tty
@@ -110,6 +84,43 @@ function vt.create(id)
         window.width = width
         window.height = height
         window.buffer = new_buffer
+    end
+
+    function obj:update() 
+        for index, value in ipairs(window.buffer) do
+            monitor.setPosition(1, index - window.scroll)
+            monitor.write(string.rep(" ", window.width))
+            monitor.setPosition(1, index - window.scroll)
+            local text = tostring(value)
+            local skip = false
+            for i = 1, #text do
+                local char = text:sub(i, i)
+
+                if skip then
+                    skip = false
+                    goto continue
+                end
+
+                if char == "&" then
+                    if window.color then
+                        local nextChar = text:sub(i + 1, i + 1)
+                        if nextChar:match("%x") then
+                            monitor.setTextColor(monitor.colors.fromBlit(tostring(nextChar)))
+                            skip = true
+                        elseif nextChar == "r" then
+                            monitor.setTextColor(monitor.colors.white)
+                            skip = true
+                        end
+                    else
+                        skip = true
+                    end
+                else
+                    monitor.write(char)
+                end
+                ::continue::
+            end
+        end
+        parentBuffer = table.deepcopy(window.buffer)
     end
 
     function obj:write(...)

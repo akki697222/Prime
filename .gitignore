@@ -1,5 +1,6 @@
 /sample
 .local_disk
 .mount
-panic.txt
+/panic.txt
+/kernel.logs
 .vscode

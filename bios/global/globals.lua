@@ -8,3 +8,7 @@ filesystem = require("bios.filesystem")
 --io = require("bios.io")
 write = io.write
 printf = print
+---@return vt
+terminal = function ()
+    
+end

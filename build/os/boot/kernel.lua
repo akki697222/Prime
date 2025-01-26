@@ -1,5 +1,6 @@
 local debug = true
 local kernel_threads = {}
+local mem = {}
 local s, e = xpcall(function ()
 
 local function checkModules()
@@ -114,6 +115,7 @@ kernel.tty = {
     instances = {},
     current = 0,
 }
+mem.logs = {}
 
 local fb = {
     buffer = {},
@@ -182,6 +184,12 @@ function printf(...)
             monitor.write(value)
         end
     end
+end
+
+function printk(vendor, ...)
+    local message = "["..(bios.epoch("local") - kernel.boottime) / 1000 .."] ".. (... and "("..vendor..") ".. ... or vendor)
+    table.insert(mem.logs, message)
+    printf(message)
 end
 
 function error(message)
@@ -937,14 +945,6 @@ function kernel.init()
     }
 end
 
-function printk(vendor, ...)
-    if not ... then
-        printf("["..(bios.epoch("local") - kernel.boottime) / 1000 .."] ".. vendor)
-    else
-        printf("["..(bios.epoch("local") - kernel.boottime) / 1000 .."] ("..vendor..") ".. ...)
-    end
-end
-
 function kernel.getCurrentProcess()
     return kernel.currentHandling
 end
@@ -1090,9 +1090,9 @@ end
 
 function kernel.stop()
     if kernel.mode.debug == true then
-        printf("/// Kernel debug ///")
-        printf("User Data Table: "..textutils.serialiseJSON(user_data))
-        printf("/// Kernel debug end ///")
+        --printf("/// Kernel debug ///")
+        --printf("User Data Table: "..textutils.serialiseJSON(user_data))
+        --printf("/// Kernel debug end ///")
     end
     kernel.fs.closeAll()
     kernel.running = false
@@ -1177,6 +1177,7 @@ function kernel.addThread(func)
         end
     end
 end
+
 while kernel.running do 
     local e = {bios.pullEventRaw()}
     --local pp = bios.native.require("cc.pretty")
@@ -1263,6 +1264,7 @@ while kernel.running do
                         kernel.killProcess(value.PID)
                     else
                         kernel.currentHandling = value.PID
+                        --[[
                         local file = kernel.fs.open("/proc/"..value.PID.."/info", "w+")
                         if file ~= nil then
                             file.write("Process Infomation")
@@ -1272,6 +1274,7 @@ while kernel.running do
                             file.write("\nCurrent Working Directory: "..value.cwd)
                             file.close()
                         end
+                        ]]
                         local s, e = coroutine.resume(value.co, value.env, kernel.fs.combine(kernel.fs.getLocalPath(), value.path), table.unpack(value.arguments))
                         if not s then
                             printk("Process "..value.PID.." Exited on error: "..e)
@@ -1320,5 +1323,15 @@ if not s then
             file.write(e or "No Error")
             file.close()
         end
+    end
+end
+
+if mem.logs then
+    local file = bios.native.fs.open("/kernel.logs", "w+")
+    if file ~= nil then
+        for i, v in ipairs(mem.logs) do
+            file.write(v.."\n")
+        end
+        file.close()
     end
 end

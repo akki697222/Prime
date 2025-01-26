@@ -1,18 +1,1 @@
-...nt/primeos/boot/kernel.lua:922: attempt to index a nil value
-stack traceback:
-	...nt/primeos/boot/kernel.lua:922: in function 'init'
-	...nt/primeos/boot/kernel.lua:1142: in function <...nt/primeos/boot/kernel.lua:3>
-	[C]: in function 'xpcall'
-	...nt/primeos/boot/kernel.lua:3: in function 'func'
-	/bios/bios.lua:154: in function 'execute'
-	...disk/primeos/boot/boot.lua:8: in function 'func'
-	/bios/bios.lua:154: in function 'execute'
-	.../bootsector/bootloader.lua:22: in function 'drawEntry'
-	.../bootsector/bootloader.lua:30: in function 'func'
-	/bios/bios.lua:154: in function 'execute'
-	/bios/bios.lua:63: in function 'post'
-	/bios/bios.lua:72: in function 'run'
-	/runos.lua:81: in function </runos.lua:80>
-	[C]: in function 'xpcall'
-	/runos.lua:80: in main chunk
-	
+[0] Booting Prime version 0.1.3-0.dev[0.001] Kernel Debug Mode.[0.002] Initializing hardware...[0.003] Setting up file systems...[0.181] (Module) Loading module: peripheral_connect_message[0.182] (Module) Loading module: vt[0.182] (Module) Loading module: tty[1.86] init exited
