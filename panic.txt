@@ -1,8 +1,6 @@
-.../kernel/drivers/tty/tty.ko:34: attempt to index local 'tty' (a nil value)
+...nt/primeos/boot/kernel.lua:1244: attempt to concatenate local 'e' (a nil value)
 stack traceback:
-	.../kernel/drivers/tty/tty.ko:34: in function 'create'
-	...nt/primeos/boot/kernel.lua:817: in function 'init'
-	...nt/primeos/boot/kernel.lua:1022: in function <...nt/primeos/boot/kernel.lua:3>
+	...nt/primeos/boot/kernel.lua:1244: in function <...nt/primeos/boot/kernel.lua:3>
 	[C]: in function 'xpcall'
 	...nt/primeos/boot/kernel.lua:3: in function 'func'
 	/bios/bios.lua:154: in function 'execute'

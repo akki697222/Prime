@@ -89,6 +89,10 @@ function graphics.clear()
     term.clear()
 end
 
+function graphics.size()
+    return term.getSize()
+end
+
 function graphics.reset()
     term.clear()
     term.setCursorPos(1,1)

@@ -8,8 +8,8 @@
         "author":"akki697222"
     },
     {
-        "name":"tty",
+        "name":"vt",
         "version":"0.1.0",
-        "path":"kernel/drivers/tty/tty"
+        "path":"kernel/drivers/tty/vt/vt"
     }
 ]

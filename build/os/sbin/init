@@ -2,25 +2,27 @@
 local process = require("system.process")
 ---@type system_info
 local system = require("system.system")
----@type printUtils
-local printutils = require("system.util.print")
 ---@type module
 local module = require("system.module")
 ---@type stdin
 local stdin = require("io.stdin")
+---@type stdout
+local stdout = require("io.stdout")
+---@type eventsystem
+local eventsystem = require("system.event")
 
 local initlog = {}
 function initlog.ok(...)
-    printutils.colorPrint(" ( &5OK&0 )  ".. tostring(...))
+    printf(" ( OK )  ".. tostring(...))
 end
 function initlog.fail(...)
-    printutils.colorPrint(" (&eFAIL&0)  ".. tostring(...))
+    printf(" (FAIL)  ".. tostring(...))
 end
 function initlog.warn(...)
-    printutils.colorPrint(" (&1WARN&0)  ".. tostring(...))
+    printf(" (WARN)  ".. tostring(...))
 end
 function initlog.log(...)
-    printutils.colorPrint("         ".. tostring(...))
+    printf("         ".. tostring(...))
 end
 
 local initver = "0.1.0"

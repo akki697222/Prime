@@ -11,35 +11,48 @@ local specials = {
 }
 
 ---@class tty_mod
-local tty = {}
+local _tty = {}
 
-function tty.create(id)
+function _tty.create(id)
+    --printf("tty"..id)
+
     ---@class tty
     local tty = {
         id = id,
         buffer = "",
-        reading = false
+        reading = false,
+        flags = {
+            canonical = true
+        }
     }
 
     ---@type eventsystem
     local eventsystem = require("system.event")
-    local keys = require("system.internal.keys")
     ---@type tty
     eventsystem.addEventHandler(function(event)
-        local _tty = terminal()
         if event[1] == "key" then
-            printf("tty" .. tty.id .." Key Pressed: " .. keys.getName(event[2]) .. " Raw: " .. event[2])
-            if event[2] == specials.enter then
-                _tty.reading = false
+            --printf("tty" .. tty.id .. " Key Pressed: " .. keys.getName(event[2]) .. " Raw: " .. event[2])
+            if tty.reading and event[2] == specials.enter and tty.flags.canonical then
+                tty.reading = false
+            end
+            if not tty.flags.canonical then
+                tty:rawInput(event[2])
+                tty.reading = false
             end
         elseif event[1] == "char" then
-            printf("tty" .. tty.id .." Key Pressed (Char) " .. event[2])
-            _tty:write(event[2])
+            --printf("tty" .. tty.id .. " Key Pressed (Char) " .. event[2])
+            if tty.flags.canonical then
+                tty:write(event[2])
+            end
         end
     end)
 
     function tty:write(data)
         self.buffer = self.buffer .. tostring(data)
+    end
+
+    function tty:rawInput(key)
+        self.buffer = key
     end
 
     function tty:read()
@@ -56,6 +69,10 @@ function tty.create(id)
         printf(self.buffer)
     end
 
+    function tty:setCanonical(state)
+        self.flags.canonical = state
+    end
+
     return tty
 end
 
@@ -69,15 +86,15 @@ local std = {}
 ---@field flush function
 
 ---@class stdin:iostream
-local stdin = {fd = 0}
+local stdin = { fd = 0 }
 
-function stdin.new() 
+function stdin.new()
     local obj = table.deepcopy(stdin)
     return obj
 end
 
 function stdin:read()
-    return terminal():read()
+    return terminal():getTTY():read()
 end
 
 function stdin:write(data)
@@ -85,13 +102,13 @@ function stdin:write(data)
 end
 
 function stdin:flush()
-    terminal():flush()
+    terminal():getTTY():flush()
 end
 
 ---@class stdout:iostream
-local stdout = {buffer = "", fd = 1}
+local stdout = { fd = 1 }
 
-function stdout.new() 
+function stdout.new()
     local obj = table.deepcopy(stdout)
     return obj
 end
@@ -101,39 +118,39 @@ function stdout:read()
 end
 
 function stdout:write(data)
-    self.buffer = self.buffer .. tostring(data)
+    terminal():write(data)
 end
 
 function stdout:flush()
-    printf(self.buffer)
+
 end
 
 ---@class stderr:iostream
-local stderr = {internal = {}, fd = 2}
+local stderr = { internal = {}, fd = 2 }
 
-function stderr.new() 
+function stderr.new()
     local obj = table.deepcopy(stderr)
     return obj
 end
 
 function stderr:read()
-    
+
 end
 
 function stderr:write(data)
-    
+
 end
 
 function stderr:flush()
-    
+
 end
 
 function init()
-    printf("TTY Init called")
+    --printf("TTY Init called")
 end
 
-tty.stdin = stdin
-tty.stdout = stdout
-tty.stderr = stderr
+_tty.stdin = stdin
+_tty.stdout = stdout
+_tty.stderr = stderr
 
-return tty, init, manifest
+return _tty, init, manifest

@@ -31,7 +31,7 @@ function table.deepcopy(orig, copies)
 end
 
 ---@class kernel
-local kernel = {boottime = bios.epoch(), tty = nil}
+local kernel = {}
 ---@class date
 local timeapi = {}
 ---@class eventsystem
@@ -108,17 +108,87 @@ kernel.user = {}
 kernel.currentHandling = -1
 kernel.loaded_modules = {}
 kernel.threads = 0
+kernel.boottime = bios.epoch("local")
+kernel.tty = {
+    instances = {},
+    current = 0,
+}
 
-local function printk(...) 
-    printf(...)
+local fb = {
+    buffer = {},
+    window = {
+        y = 1,
+        x = 1,
+        width = 80,
+        height = 24,
+    }
+}
+
+for i = 1, fb.window.height do
+    fb.buffer[i] = string.rep(" ", fb.window.width)
+end
+
+function fb.write(...)
+    local text = tostring(...)
+    for i = 1, #text do
+        local char = text:sub(i, i)
+
+        if char == "\n" then
+            fb.window.y = fb.window.y + 1
+            fb.window.x = 1
+        else
+            local currentLine = fb.buffer[fb.window.y]
+            fb.buffer[fb.window.y] = currentLine:sub(1, fb.window.x - 1)
+                .. char ..
+                currentLine:sub(fb.window.x + 1)
+            fb.window.x = fb.window.x + 1
+
+            if fb.window.x > fb.window.width then
+                fb.window.x = 1
+                fb.window.y = fb.window.y + 1
+            end
+        end
+
+        if fb.window.y > fb.window.height then
+            fb.scroll()
+        end
+    end
+end
+
+function fb.scroll()
+    table.remove(fb.buffer, 1)
+    table.insert(fb.buffer, string.rep(" ", fb.window.width))
+    fb.window.y = fb.window.height
+end
+
+function fb.clear()
+    for i = 1, fb.window.height do
+        fb.buffer[i] = string.rep(" ", fb.window.width)
+    end
+    fb.window.x, fb.window.y = 1, 1
+end
+
+function printf(...)
+    local ctty = kernel.getTTY()
+    if ctty then
+        ctty:write(... .. "\n")
+    else
+        fb.write(... .. "\n")
+        for index, value in ipairs(fb.buffer) do
+            monitor.setPosition(1, index)
+            monitor.write(string.rep(" ", fb.window.width))
+            monitor.setPosition(1, index)
+            monitor.write(value)
+        end
+    end
 end
 
 ---What happened!? ... Yes, the kernel seems to have crashed...
 local function panic(message, errors)
     if errors == nil then
-        kernel.log("Kernel panic - "..message)
+        printk("Kernel panic - "..message)
     else
-        kernel.log("Kernel panic - "..message)
+        printk("Kernel panic - "..message)
         printf("Stack Trace:")
         printf(errors)
     end
@@ -183,7 +253,7 @@ function eventsystem.addEventHandler(func)
     if type(func) == "function" then
         table.insert(kernel.eventhandlers, {func = func, isSingle = false, filter = nil})
     else
-        kernel.log("EventSystem", "Invalid Function")
+        printk("EventSystem", "Invalid Function")
     end
 end
 
@@ -191,7 +261,7 @@ function eventsystem.addSingleEventHandler(func)
     if type(func) == "function" then
         table.insert(kernel.eventhandlers, {func = func, isSingle = true, filter = nil})
     else
-        kernel.log("EventSystem", "Invalid Function")
+        printk("EventSystem", "Invalid Function")
     end
 end
 
@@ -199,7 +269,7 @@ function eventsystem.addSingleFilteredEventHandler(filter, func)
     if type(func) == "function" then
         table.insert(kernel.eventhandlers, {func = func, isSingle = true, filter = filter})
     else
-        kernel.log("EventSystem", "Invalid Function")
+        printk("EventSystem", "Invalid Function")
     end
 end
 
@@ -331,7 +401,7 @@ end
 function userfs.open(path, mode)
     local perm_table = fperm.getPermissionTable(kernel.fs.getDir(path))
     if perm_table == nil or perm_table == {} then
-        kernel.log("Filesystem", "Error: Directory Metadata not found. (in directory "..kernel.fs.getDir(path)..")")
+        printk("Filesystem", "Error: Directory Metadata not found. (in directory "..kernel.fs.getDir(path)..")")
         return nil
     end
     if kernel.fs.getFile(path) == ".meta" then
@@ -339,11 +409,11 @@ function userfs.open(path, mode)
     end
     if kernel.fs.exists(path) then
         if perm_table[kernel.fs.getFile(path)] ~= nil then
-            perm_table[kernel.fs.getFile(path)].timestamp.mtime = timeapi.epoch("local") / 1000
+            perm_table[kernel.fs.getFile(path)].timestamp.mtime = bios.epoch("local")
         end
     elseif mode == "w" or mode == "w+" or mode == "r+" then
         if perm_table[kernel.fs.getFile(path)] ~= nil then
-            perm_table[kernel.fs.getFile(path)].timestamp.mtime = timeapi.epoch("local") / 1000
+            perm_table[kernel.fs.getFile(path)].timestamp.mtime = bios.epoch("local")
         else
             perm_table[kernel.fs.getFile(path)] = fperm.generateMetatable(nil, false)
         end
@@ -357,7 +427,7 @@ end
 function userfs.delete(path)
     local perm_table = fperm.getPermissionTable(kernel.fs.getDir(path))
     if perm_table == nil or perm_table == {} then
-        kernel.log("Filesystem", "Error: Directory Metadata not found. (in directory "..kernel.fs.getDir(path)..")")
+        printk("Filesystem", "Error: Directory Metadata not found. (in directory "..kernel.fs.getDir(path)..")")
         return
     end
     if kernel.fs.exists(path) then
@@ -410,8 +480,8 @@ function fperm.generateMetatable(permission, isDir, owner, group)
         isDir = isDir, 
         size = 0, 
         timestamp = {
-            btime = timeapi.epoch("local") / 1000, 
-            mtime = timeapi.epoch("local") / 1000
+            btime = bios.epoch("local"), 
+            mtime = bios.epoch("local")
         }
     }
 end
@@ -503,7 +573,7 @@ function fperm.init()
         local listdir = kernel.fs.list(value)
         for i, v in ipairs(listdir) do
             if permissiondata[v.name] == nil then
-               permissiondata[v.name] = {permission = {owner = {r = true, w = true, x = true}, group = {r = true, w = false, x = false}, other = {r = true, w = false, x = false}}, owner = 0, group = 0, size = v.attributes.size or 0, timestamp = {btime = v.attributes.created / 1000, mtime = v.attributes.modified / 1000}}
+                permissiondata[v.name] = {permission = {owner = {r = true, w = true, x = true}, group = {r = true, w = false, x = false}, other = {r = true, w = false, x = false}}, owner = 0, group = 0, size = v.attributes.size or 0, timestamp = {btime = v.attributes.created / 1000, mtime = v.attributes.modified / 1000}}
             end 
             if permissiondata[v.name].timestamp == nil then
                 permissiondata[v.name].timestamp = {btime = 0, mtime = 0}
@@ -513,9 +583,6 @@ function fperm.init()
             end
         end
         if file ~= nil then
-            if kernel.mode.debug then
-                kernel.log("Debug", "Generated .meta in directory: "..value)
-            end
             file.write(textutils.serialiseJSON(permissiondata))
             file.close()
         end
@@ -580,7 +647,6 @@ end
 -- Module API
 
 ---@param name string
----@
 ---@return table|nil
 ---@return module_manifest|nil
 function module.load(name)
@@ -588,13 +654,26 @@ function module.load(name)
         ---@type module_manifest
         value.manifest = value.manifest
         if value.manifest.name == name then
-            kernel.log("Module", "Loading module: "..value.manifest.name)
+            printk("Module", "Loading module: "..value.manifest.name)
             setfenv(value.init, kernel.env)
             table.insert(kernel_threads, value.init)
             return value.main, value.manifest
         end
     end
-    kernel.log("Module", "Cannot find module '"..name.."'")
+    printk("Module", "Cannot find module '"..name.."'")
+    return nil, nil
+end
+
+---@param name string
+---@return table|nil
+---@return module_manifest|nil
+function module.get(name)
+    for index, value in ipairs(kernel.loaded_modules) do
+        if value.manifest.name == name then
+            return value.main, value.manifest
+        end
+    end
+    printk("Module", "Cannot find module '"..name.."'")
     return nil, nil
 end
 
@@ -605,7 +684,7 @@ function module.register(main, init, manifest)
     assert(manifest ~= nil, "bad argument #3 to 'register' (table expected, got nil)")
     assert(type(manifest) == "table", "bad argument #3 to 'register' (table expected, got "..type(manifest)..")")
     if not (manifest.name and manifest.version and manifest.path) then
-        kernel.log("Module", "Invalid module manifest")
+        printk("Module", "Invalid module manifest")
     else
         table.insert(kernel.loaded_modules, {manifest = manifest, main = main, init = init})
     end
@@ -632,7 +711,7 @@ end
 ---@param manifest module_manifest
 function module.register_autoloader(main, init, manifest)
     if not (manifest.name and manifest.version and manifest.path) then
-        kernel.log("Module", "Invalid module")
+        printk("Module", "Invalid module")
     else
         local file = kernel.fs.open("/etc/modules", "r")
         if file ~= nil then
@@ -646,7 +725,7 @@ function module.register_autoloader(main, init, manifest)
                 table.insert(kernel.loaded_modules, {manifest = manifest, main = main, init = init})
             end
         else
-            kernel.log("Module", "Cannot load /etc/modules")
+            printk("Module", "Cannot load /etc/modules")
         end
     end
 end
@@ -654,7 +733,7 @@ end
 function module.autoload()
     local file = kernel.fs.open("/etc/modules", "r")
     if file == nil then
-        kernel.log("Module", "Cannot load /etc/modules")
+        printk("Module", "Cannot load /etc/modules")
         return
     end
 
@@ -699,6 +778,7 @@ end
 -- Device API
 
 
+
 -- Kernel API
 
 function kernel.init()
@@ -741,7 +821,7 @@ function kernel.init()
         string = string,
 
         printf = printf,
-        printk = kernel.log,
+        printk = printk,
         write = write,
         pairs = pairs,
         ipairs = ipairs,
@@ -756,9 +836,7 @@ function kernel.init()
         next = next,
         require = kernel.require,
         type = type,
-        terminal = function () 
-            return kernel.tty
-        end,
+        terminal = kernel.getTTY,
 
         _ERR = 0,
     }
@@ -807,7 +885,8 @@ function kernel.init()
                 peripheral = bios.native.peripheral
             },
             kernel = {
-                createThread = kernel.addThread
+                createThread = kernel.addThread,
+                printk = printk
             }
         }
     }  
@@ -817,8 +896,13 @@ function kernel.init()
     module.autoload()
     -- tty
     ---@type tty_mod
-    local tty = module.load("tty")
-    kernel.tty = tty.create(0)
+    local tty = module.get("tty")
+    ---@type vt_mod
+    local vt = module.get("vt")
+    kernel.tty.instances[1] = vt.create(1)
+    kernel.tty.current = 1
+    local width, height = monitor.size()
+    kernel.getTTY():transfer(fb.buffer, fb.window.x, fb.window.y, width, height)
     kernel.modules.io = {
         stdin = tty.stdin.new(),
         stdout = tty.stdout.new(),
@@ -826,11 +910,11 @@ function kernel.init()
     }
 end
 
-function kernel.log(vendor, ...)
+function printk(vendor, ...)
     if not ... then
-        printf("["..(bios.epoch() - kernel.boottime) / 1000 .."] ".. vendor)
+        printf("["..(bios.epoch("local") - kernel.boottime) / 1000 .."] ".. vendor)
     else
-        printf("["..(bios.epoch() - kernel.boottime) / 1000 .."] ("..vendor..") ".. ...)
+        printf("["..(bios.epoch("local") - kernel.boottime) / 1000 .."] ("..vendor..") ".. ...)
     end
 end
 
@@ -845,6 +929,19 @@ function kernel.continue(thread)
         thread.resumes = thread.resumes + 1
         return coroutine.resume(thread.co)
     end
+end
+
+---@return vt|nil
+function kernel.getTTY(id) 
+
+    if kernel.tty.instances[id] then
+        return kernel.tty.instances[id]
+    else
+        if kernel.tty.current > 0 then
+            return kernel.tty.instances[kernel.tty.current]
+        end
+    end
+    return nil
 end
 
 function kernel.fork()
@@ -919,7 +1016,7 @@ function kernel.exec(path, env, nice, arguments)
     end
     local pid = table.maxn(kernel.process) + 1
     if not kernel.fs.exists(path) then
-        kernel.log("Process " .. pid .. " failed to start: No such file")
+        printk("Process " .. pid .. " failed to start: No such file")
     else
         table.insert(kernel.process, {
             threads = {},
@@ -978,16 +1075,17 @@ function kernel.printOutput(printTable)
             end
         end
     end
+    local ctty = kernel.getTTY()
     for index, value in ipairs(printTable) do
         for i, v in ipairs(value) do
             local strv = tostring(v)
-            write(strv)
+            ctty:write(strv)
             for i = 1, len[i] - #strv do
-                write(" ")
+                ctty:write(" ")
             end
-            write(" ")
+            ctty:write(" ")
         end
-        printf()
+        ctty:write("\n")
     end
 end
 
@@ -998,14 +1096,14 @@ end
 
 monitor.reset()
 
-kernel.log("Booting "..kernel.name)
+printk("Booting "..kernel.name)
 if kernel.mode.debug == true then
-    kernel.log("Kernel Debug Mode.")
+    printk("Kernel Debug Mode.")
 end
 
-kernel.log("Initializing hardware...")
+printk("Initializing hardware...")
 
-kernel.log("Setting up file systems...")
+printk("Setting up file systems...")
 local new_fs = filesystem.create("mount", kernel.partition.root)
 
 if new_fs == nil then
@@ -1043,7 +1141,6 @@ function kernel.addThread(func)
 end
 while kernel.running do 
     local e = {bios.pullEventRaw()}
-    local eventName = e[1]
     --local pp = bios.native.require("cc.pretty")
     --pp.pretty_print(e)
     if e[1] == "terminate" or e[1] == "kernel_exit" then
@@ -1061,23 +1158,21 @@ while kernel.running do
                     end
                     setfenv(value.func, nenv)
                 end
-                if value.filter then
-                    if value.filter == eventName then
-                        if value.isSingle then
-                            table.insert(exits, index)
-                            value.func(table.deepcopy(e))
-                        else
-                            value.func(table.deepcopy(e))
-                        end
+                
+                -- Modified event handler processing
+                local shouldProcess = 
+                    (not value.filter) or  -- No filter, always process
+                    (value.filter and value.filter == e[1])  -- Filter matches event
+
+                if shouldProcess then
+                    if value.isSingle then
+                        table.insert(exits, index)
                     end
-                elseif value.isSingle then
-                    table.insert(exits, index)
-                    value.func(table.deepcopy(e))
-                else
                     value.func(table.deepcopy(e))
                 end
             end
         end
+        
         for index, value in ipairs(exits) do
             table.remove(kernel.eventhandlers, value)
         end
@@ -1112,7 +1207,7 @@ while kernel.running do
             if coroutine.status(child_process.co) ~= "dead" then
                 local success, result = coroutine.resume(child_process.co, 0)
                 if not success then
-                    kernel.log("Process " .. new_pid .. " failed to start: " .. tostring(result))
+                    printk("Process " .. new_pid .. " failed to start: " .. tostring(result))
                     kernel.killProcess(new_pid)
                 end
             else
@@ -1140,7 +1235,7 @@ while kernel.running do
                         end
                         local s, e = coroutine.resume(value.co, value.env, kernel.fs.combine(kernel.fs.getLocalPath(), value.path), table.unpack(value.arguments))
                         if not s then
-                            kernel.log("Process "..value.PID.." Exited on error: "..e)
+                            printk("Process "..value.PID.." Exited on error: "..e)
                         end
                     end
                 end
@@ -1154,7 +1249,10 @@ while kernel.running do
                 if coroutine.status(value) == "dead" then
                     table.insert(dead_threads, index)
                 else
-                    coroutine.resume(value)
+                    local s, e = coroutine.resume(value)
+                    if not s then
+                        printk("Kernel Thread "..index.." Exited on error: "..(e or "No Error"))
+                    end
                 end
             end
         end
@@ -1164,7 +1262,7 @@ while kernel.running do
     end
 
     if not kernel.process[1] then
-        kernel.log("init exited")
+        printk("init exited")
         kernel.running = false
     end
 
