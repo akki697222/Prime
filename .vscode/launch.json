@@ -6,8 +6,9 @@
     "configurations": [
         {
             "type": "craftos-pc",
-            "request": "launch",
-            "name": "Debug CraftOS-PC"
+            "request": "attach",
+            "name": "Debug CraftOS-PC",
+            "port": 12102
         }
     ]
 }

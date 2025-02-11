@@ -8,10 +8,20 @@ local module = require("system.module")
 local stdin = require("io.stdin")
 ---@type stdout
 local stdout = require("io.stdout")
+---@type stderr
+local stderr = require("io.stderr")
 ---@type eventsystem
 local eventsystem = require("system.event")
 ---@type filesystem
 local fs = require("system.filesystem")
+---@type user
+local user = require("system.user")
+---@type date
+local date = require("system.util.date")
+---@type permission
+local permission = require("system.permission")
+---@type printUtils
+local printutils = require("system.util.print")
 
 local initlog = {}
 function initlog.ok(...)
@@ -36,7 +46,8 @@ initlog.fail("FAIL")
 initlog.warn("WARN")
 initlog.log("LOG")
 
-printf("Successfully executed read! result: " .. stdin:read())
+process.exec("/usr/bin/sh")
+
 while true do
     coroutine.yield()
 end

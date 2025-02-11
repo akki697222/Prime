@@ -1,3 +1,5 @@
+debug.debug()
+
 local partition = require("bios.partition")
 local log = require("bios.log")
 local fs_advanced = require("bios.filesystem")

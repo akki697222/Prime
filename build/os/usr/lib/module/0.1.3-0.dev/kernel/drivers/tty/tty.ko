@@ -148,7 +148,7 @@ function stderr:read()
 end
 
 function stderr:write(data)
-    terminal():write(data)
+    terminal():write("&e"..data.."&0")
 end
 
 function stderr:flush()

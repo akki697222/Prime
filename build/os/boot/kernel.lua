@@ -1275,9 +1275,18 @@ while kernel.running do
                             file.close()
                         end
                         ]]
-                        local s, e = coroutine.resume(value.co, value.env, kernel.fs.combine(kernel.fs.getLocalPath(), value.path), table.unpack(value.arguments))
-                        if not s then
-                            printk("Process "..value.PID.." Exited on error: "..e)
+                        --printf(kernel.fs.combine(kernel.fs.getLocalPath(), value.path))
+                        local p = string.gsub(value.path, "^@", "")
+                        if not kernel.fs.existsWithoutRoot(p) then
+                            p = kernel.fs.combine(kernel.fs.getLocalPath(), value.path)
+                        end
+                        if not kernel.fs.existsWithoutRoot(p) then
+                            printk("Internal Error: " .. p .. ": No such file")
+                        else
+                            local s, e = coroutine.resume(value.co, value.env, p, table.unpack(value.arguments))
+                            if not s then
+                                printk("Process "..value.PID.." Exited on error: "..(e or "No Error"))
+                            end
                         end
                     end
                 end

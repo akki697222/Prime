@@ -19,6 +19,8 @@ function vt.create(id)
     local window = {
         x = 1,
         y = 1,
+        cx = 1,
+        cy = 1,
         width = 80,
         height = 24,
         scroll = 0,
@@ -84,6 +86,11 @@ function vt.create(id)
         window.width = width
         window.height = height
         window.buffer = new_buffer
+        for i = 0, window.height do
+            if not window.buffer[i] then
+                window.buffer[i] = string.rep(" ", window.width)
+            end
+        end
     end
 
     function obj:update() 
@@ -138,15 +145,14 @@ function vt.create(id)
                 end
             else
                 local currentLine = window.buffer[window.y] or string.rep(" ", window.width)
-                window.buffer[window.y] = currentLine:sub(1, window.x - 1)
-                    .. char ..
-                    currentLine:sub(window.x + 1)
+            
+                window.buffer[window.y] = currentLine:sub(1, window.x - 1) .. char .. currentLine:sub(window.x + 1)
                 window.x = window.x + 1
-
+            
                 if window.x > window.width then
                     window.x = 1
                     window.y = window.y + 1
-
+            
                     if window.y > window.height then
                         self:scroll()
                         window.y = window.height
@@ -187,6 +193,7 @@ function vt.create(id)
 end
 
 function init()
+
 end
 
 return vt, init, manifest

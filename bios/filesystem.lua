@@ -57,6 +57,7 @@ function filesystem.create(mode, name)
     ---@param mode mode
     ---@param path string The path to the file to open.
     filehandler.open = function(path, mode)
+        --print("open " .. path)
         if isReadOnly then
             return nil
         end
@@ -66,6 +67,9 @@ function filesystem.create(mode, name)
     end
     filehandler.exists = function(path)
         return fs.exists(fs.combine(root, path))
+    end
+    filehandler.existsWithoutRoot = function(path)
+        return fs.exists(path)
     end
     filehandler.isReadOnly = function()
         return isReadOnly
