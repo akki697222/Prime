@@ -3,6 +3,7 @@ local manifest = {
     name = "tty",
     version = "0.1.3-0.dev",
     path = "kernel/drivers/tty/tty",
+    license = "MIT",
     depends = {}
 }
 
@@ -15,7 +16,7 @@ local specials = {
 local _tty = {}
 
 function _tty.create(id)
-    --printf("tty"..id)
+    printf("created tty"..id)
 
     ---@class tty
     local tty = {

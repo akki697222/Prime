@@ -46,8 +46,4 @@ initlog.fail("FAIL")
 initlog.warn("WARN")
 initlog.log("LOG")
 
-process.exec("/usr/bin/sh")
-
-while true do
-    coroutine.yield()
-end
+process.execve("/usr/bin/sh")

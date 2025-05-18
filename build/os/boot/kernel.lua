@@ -971,37 +971,29 @@ function kernel.getTTY(id)
     return nil
 end
 
-function kernel.fork()
-    local info = bios.debug.getinfo(2, "fS")
+-- 修正1: kernel.fork関数の改良
+function kernel.fork(path, arguments)
     local new_pid = table.maxn(kernel.process) + 1
-    local new_process = {
-        co = coroutine.create(function()
-            local pid = coroutine.yield()
-            if pid == 0 then
-                return info.func()
-            end
-        end),
+    
+    -- 子プロセス用のスレッド作成
+    local pid = table.maxn(kernel.process) + 1
+    table.insert(kernel.process, {
         threads = {},
-        PID = new_pid,
-        path = info.source,
+        co = coroutine.create(bios.native.nativeRun),
+        PID = pid,
+        path = path,
         nice = 3,
         env = table.deepcopy(kernel.env),
-        user = user.getData(user.getCurrent()).name,
-        arguments = {},
-        parent = kernel.currentHandling,
+        user = user.getCurrent(),
+        arguments = arguments,
+        parent = kernel.getCurrentProcess(),
         fd = {},
-        cwd = kernel.fs.getDir(info.source)
-    }
+        cwd = kernel.fs.getDir(path)
+    })
     
-    table.insert(kernel.process, new_process)
-    
-    eventsystem.push("kcall_fork_complete", new_pid)
-
     local parent = kernel.getProcessFromPID(kernel.currentHandling)
-    if parent then
-        if parent.parent > 0 then
-            return 0
-        end
+    if parent and parent.parent > 0 then
+        return 0
     end
     
     return new_pid
@@ -1060,6 +1052,68 @@ function kernel.exec(path, env, nice, arguments)
             cwd = kernel.fs.getDir(path)
         })
     end
+end
+
+-- execve 関数の追加
+function kernel.execve(path, env, nice, arguments)
+    if type(path) ~= "string" then
+        printf("execve: bad argument #1 (Expected string, got " .. type(path) .. ")")
+        return -1
+    end
+    
+    if not kernel.fs.exists(path) then
+        printk("Process", "execve failed: No such file or directory: " .. path)
+        return -1
+    end
+    
+    if type(env) ~= "table" then
+        env = table.deepcopy(kernel.env)
+    end
+    
+    if type(nice) ~= "number" then
+        nice = 3
+    end
+    
+    if type(arguments) ~= "table" then
+        arguments = {}
+    end
+    
+    -- 現在のプロセスを取得
+    local currentProcess, index = kernel.getSelf()
+    if not currentProcess then
+        printk("Process", "execve failed: Current process not found")
+        return -1
+    end
+    
+    -- 古いコルーチンを保存
+    local oldCoroutine = currentProcess.co
+    if not kernel.fs.existsWithoutRoot(path) then
+        path = kernel.fs.combine(kernel.fs.getLocalPath(), path)
+    end
+    if not kernel.fs.existsWithoutRoot(path) then
+        printk("Internal Error: " .. path .. ": No such file")
+    end
+    
+    -- プロセスを新しいプログラムで置き換え
+    currentProcess.co = coroutine.create(bios.native.nativeRun)
+    currentProcess.path = path
+    currentProcess.env = env
+    currentProcess.nice = nice
+    currentProcess.arguments = arguments
+    currentProcess.cwd = kernel.fs.getDir(path)
+    currentProcess.threads = {} -- スレッドをクリア
+    
+    -- 実行を開始
+    local success, result = coroutine.resume(currentProcess.co, env, path, table.unpack(arguments))
+    
+    if not success then
+        printk("Process", "execve failed to start " .. path .. ": " .. tostring(result))
+        -- 失敗した場合は元のコルーチンを復元
+        currentProcess.co = oldCoroutine
+        return -1
+    end
+    
+    return 0
 end
 
 function kernel.killProcess(pid)
@@ -1231,28 +1285,6 @@ while kernel.running do
         local message = table.remove(e, 1)
         local err = table.remove(e, 1)
         panic(message, err)
-    elseif e[1] == "kcall_fork_complete" then
-        table.remove(e, 1)
-        local new_pid = table.remove(e, 1)
-        local child_process = nil
-        for _, proc in ipairs(kernel.process) do
-            if proc.PID == new_pid then
-                child_process = proc
-                break
-            end
-        end
-    
-        if child_process then
-            if coroutine.status(child_process.co) ~= "dead" then
-                local success, result = coroutine.resume(child_process.co, 0)
-                if not success then
-                    printk("Process " .. new_pid .. " failed to start: " .. tostring(result))
-                    kernel.killProcess(new_pid)
-                end
-            else
-                kernel.killProcess(new_pid)
-            end
-        end
     else
         table.sort(kernel.process, function (a, b)
             return a.nice < b.nice
@@ -1261,7 +1293,13 @@ while kernel.running do
             for index, value in ipairs(tbl) do
                 if value.co then
                     if coroutine.status(value.co) == "dead" then
-                        kernel.killProcess(value.PID)
+                        local remove = -1
+                        for index, v in ipairs(kernel.process) do
+                            if value.PID == v.PID then
+                                remove = index
+                            end
+                        end
+                        table.remove(kernel.process, remove)
                     else
                         kernel.currentHandling = value.PID
                         --[[

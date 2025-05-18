@@ -1,3 +1,6 @@
+-- PrimeOS Minimal Shell
+-- File: /usr/bin/sh
+
 ---@type stdin
 local stdin = require("io.stdin")
 ---@type stdout
@@ -8,27 +11,42 @@ local stderr = require("io.stderr")
 local user = require("system.user")
 ---@type filesystem
 local fs = require("system.filesystem")
----@type date
-local date = require("system.util.date")
----@type permission
-local permission = require("system.permission")
 ---@type printUtils
 local printutils = require("system.util.print")
 ---@type process
 local process = require("system.process")
 
-while true do
-    stdout:write("&4$&0 ")
-    local value = stdin:read()
-    local path = fs.combine(fs.cwd(), value)
-    local tokens = {}
-    for t in string.gmatch(path, "%S+") do
-        table.insert(tokens, t)
+local running = true
+
+local s, e = pcall(function()
+    while running do
+        stdout:write(user.getData(user.getCurrent()).name .. "@primeos# ")
+        local input = stdin:read()
+        if input == "exit" then
+            running = false
+        elseif input and input ~= "" then
+            local args = {}
+            for word in input:gmatch("%S+") do
+                table.insert(args, word)
+            end
+            local cmd = table.remove(args, 1)
+            local path = fs.combine(fs.cwd(), cmd)
+            if not fs.exists(path) then
+                path = fs.combine("/usr/bin", cmd)
+            end
+            if fs.exists(path) then
+                process.fork(path, args)
+                coroutine.yield()
+            else
+                printf("&cCommand not found: " .. cmd .. "&0")
+            end
+        end
     end
-    if fs.exists(tokens[1]) then
-        process.exec(table.remove(tokens, 1), nil, nil, tokens)
-    else
-        stderr:write("sh: No such file\n")
+end)
+
+if not s then
+    printk(e)
+    while true do
+        coroutine.yield()
     end
-    coroutine.yield()
 end
