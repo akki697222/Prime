@@ -16,7 +16,7 @@ local specials = {
 local _tty = {}
 
 function _tty.create(id)
-    printf("created tty"..id)
+    printk("tty" .. id .. " created")
 
     ---@class tty
     local tty = {
@@ -96,6 +96,13 @@ local std = {}
 ---@field write function
 ---@field flush function
 
+---@class screen
+local screen = {}
+
+function screen.clear()
+    terminal():clear()
+end
+
 ---@class stdin:iostream
 local stdin = { fd = 0 }
 
@@ -163,5 +170,6 @@ end
 _tty.stdin = stdin
 _tty.stdout = stdout
 _tty.stderr = stderr
+_tty.screen = screen
 
 return _tty, init, manifest

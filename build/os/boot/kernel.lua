@@ -503,6 +503,14 @@ function userfs.cwd()
     return kernel.getSelf().cwd
 end
 
+function userfs.home()
+    if kernel.user == 0 then
+        return "/root"
+    else
+        return "/home/" .. user.getData(kernel.user).name
+    end
+end
+
 -- File permission API
 function fperm.generateMetatable(permission, isDir, owner, group)
     return {
@@ -834,7 +842,7 @@ function kernel.init()
             user.create("akki", "akki", 100, 1)
         end
     end
-    kernel.user = 0
+    kernel.user = 1
     -- Initialize for require
     local lp = kernel.fs.getLocalPath()
     if kernel.mode.debug then
@@ -899,7 +907,8 @@ function kernel.init()
                 kill = kernel.killProcess,
                 clone = kernel.clone,
                 thread = kernel.thread,
-                continue = kernel.continue
+                continue = kernel.continue,
+                chdir = kernel.chdir
             },
             ---@class util
             util = {
@@ -941,7 +950,8 @@ function kernel.init()
     kernel.modules.io = {
         stdin = tty.stdin.new(),
         stdout = tty.stdout.new(),
-        stderr = tty.stderr.new()
+        stderr = tty.stderr.new(),
+        screen = tty.screen
     }
 end
 
@@ -1140,6 +1150,18 @@ function kernel.getSelf()
         end
     end
     return nil, -1
+end
+
+function kernel.chdir(pid, path)
+    ---@type process_data|nil, integer
+    local proc, idx = kernel.getProcessFromPID(pid)
+    if proc then
+        proc.cwd = path
+        kernel.process[idx] = proc
+        return true
+    else
+        return false
+    end
 end
 
 function kernel.stop()
@@ -1374,7 +1396,7 @@ if not s then
 end
 
 if mem.logs then
-    local file = bios.native.fs.open("/kernel.logs", "w+")
+    local file = bios.native.fs.open("/kernel.log", "w+")
     if file ~= nil then
         for i, v in ipairs(mem.logs) do
             file.write(v.."\n")

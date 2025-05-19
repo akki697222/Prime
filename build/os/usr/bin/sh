@@ -18,35 +18,50 @@ local process = require("system.process")
 
 local running = true
 
-local s, e = pcall(function()
-    while running do
-        stdout:write(user.getData(user.getCurrent()).name .. "@primeos# ")
-        local input = stdin:read()
-        if input == "exit" then
-            running = false
-        elseif input and input ~= "" then
-            local args = {}
-            for word in input:gmatch("%S+") do
-                table.insert(args, word)
-            end
-            local cmd = table.remove(args, 1)
-            local path = fs.combine(fs.cwd(), cmd)
-            if not fs.exists(path) then
-                path = fs.combine("/usr/bin", cmd)
-            end
-            if fs.exists(path) then
-                process.fork(path, args)
-                coroutine.yield()
+while running do
+    if user.getCurrent() ~= 0 then
+        stdout:write("&5" .. user.getData(user.getCurrent()).name .. "@primeos&0:&3/" .. fs.cwd() .. "&0$ ")
+    else
+        stdout:write(user.getData(user.getCurrent()).name .. "@primeos:/" .. fs.cwd() .. "# ")
+    end
+    local input = stdin:read()
+    if not input then
+        goto continue
+    end
+    local args = {}
+    for word in input:gmatch("%S+") do
+        table.insert(args, word)
+    end
+    local op = table.remove(args, 1)
+    if op == "exit" then
+        running = false
+    elseif op == "cd" then
+        local path = table.remove(args, 1)
+        if path == "" then
+            fs.chdir(fs.home())
+        end
+        local newDir = fs.combine("/", path)
+        if fs.isDir(newDir) then
+            fs.chdir(newDir)
+        else
+            if fs.exists(newDir) then
+                printf("cd: " .. newDir .. ": Not a directory")
             else
-                printf("&cCommand not found: " .. cmd .. "&0")
+                printf("cd: " .. newDir .. ": No such file or directory")
             end
         end
+    elseif input and input ~= "" then
+        local path = fs.combine(fs.cwd(), op)
+        if not fs.exists(path) then
+            path = fs.combine("/usr/bin", op)
+        end
+        if fs.exists(path) then
+            local pid = process.fork(path, args)
+            process.chdir(pid, fs.cwd())
+            coroutine.yield()
+        else
+            printf(op .. ": command not found")
+        end
     end
-end)
-
-if not s then
-    printk(e)
-    while true do
-        coroutine.yield()
-    end
+    ::continue::
 end

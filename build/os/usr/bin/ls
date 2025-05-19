@@ -14,7 +14,7 @@ local printutils = require("system.util.print")
 local listIgnores = {".meta"}
 
 local parser = aparse("ls", "list")
-parser:argument("directory", "", "/")
+parser:argument("directory", "", fs.cwd())
 parser:flag("-a --all", "do not ignore entries starting with .")
 parser:flag("-l", "use a long listing format")
 
