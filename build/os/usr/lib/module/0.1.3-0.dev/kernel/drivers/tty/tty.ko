@@ -16,8 +16,6 @@ local specials = {
 local _tty = {}
 
 function _tty.create(id)
-    printk("tty" .. id .. " created")
-
     ---@class tty
     local tty = {
         id = id,

@@ -12,25 +12,6 @@ local function checkModules()
     end
 end
 
-function table.deepcopy(orig, copies)
-    copies = copies or {}
-    if copies[orig] then return copies[orig] end
-
-    local orig_type = type(orig)
-    local copy
-    if orig_type == 'table' then
-        copy = {}
-        copies[orig] = copy
-        for orig_key, orig_value in next, orig, nil do
-            copy[table.deepcopy(orig_key, copies)] = table.deepcopy(orig_value, copies)
-        end
-        setmetatable(copy, table.deepcopy(getmetatable(orig), copies))
-    else
-        copy = orig
-    end
-    return copy
-end
-
 ---@class kernel
 local kernel = {}
 ---@class date
@@ -217,6 +198,23 @@ local function panic(message, errors)
         printf(errors)
     end
     kernel.stop()
+end
+
+function table.deepcopy(orig, cache)
+    cache = cache or {}
+    if type(orig) ~= "table" then
+        return orig
+    end
+    if cache[orig] then
+        return cache[orig]
+    end
+    local copy = {}
+    cache[orig] = copy
+    for k, v in pairs(orig) do
+        copy[table.deepcopy(k, cache)] = table.deepcopy(v, cache)
+    end
+    setmetatable(copy, table.deepcopy(getmetatable(orig), cache))
+    return copy
 end
 
 function kernel.require(modname)

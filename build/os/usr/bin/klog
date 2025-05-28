@@ -1,0 +1,4 @@
+local args = {...}
+if #args > 0 then
+    printk("klog", table.unpack(args))
+end
