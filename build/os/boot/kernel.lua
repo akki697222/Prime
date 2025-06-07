@@ -153,6 +153,7 @@ function fb.clear()
 end
 
 function printf(...)
+    _G.printf = printf -- Make printf globally available for testing exit path
     local ctty = kernel.getTTY()
     if ctty then
         ctty:write(... .. "\n")
@@ -215,6 +216,23 @@ function table.deepcopy(orig, cache)
     end
     setmetatable(copy, table.deepcopy(getmetatable(orig), cache))
     return copy
+end
+
+function kernel.createProcessEnvironment()
+    local new_env = {}
+    -- Copy all top-level key-value pairs from kernel.env by reference
+    for k, v in pairs(kernel.env) do
+        new_env[k] = v
+    end
+    -- Specifically, ensure 'system.module' and other critical parts
+    -- are references, not deep copies that might pull in large data.
+    -- The default shallow copy above should handle this for top-level elements.
+    -- If kernel.env.system.module itself contains dynamic/large tables that are
+    -- problematic, this part would need more specific handling.
+    -- However, kernel.env.system.module refers to the 'module' table which contains
+    -- functions mostly. The problematic kernel.loaded_modules is used internally
+    -- by these functions, not directly part of the exported 'module' table structure.
+    return new_env
 end
 
 function kernel.require(modname)
@@ -991,7 +1009,7 @@ function kernel.fork(path, arguments)
         PID = pid,
         path = path,
         nice = 3,
-        env = table.deepcopy(kernel.env),
+        env = kernel.createProcessEnvironment(),
         user = user.getCurrent(),
         arguments = arguments,
         parent = kernel.getCurrentProcess(),
@@ -1011,7 +1029,7 @@ function kernel.clone()
     ---@type process_data
     local new_proc = kernel.getProcessFromPID(kernel.currentHandling)
     new_proc.PID = table.maxn(kernel.process) + 1
-    new_proc.env = table.deepcopy(new_proc.env)
+    new_proc.env = kernel.createProcessEnvironment()
     new_proc.parent = kernel.currentHandling
 end
 
@@ -1034,7 +1052,7 @@ function kernel.exec(path, env, nice, arguments)
         return
     end
     if type(env) ~= "table" then
-        env = table.deepcopy(kernel.env)
+        env = kernel.createProcessEnvironment()
     end
     if type(nice) ~= "number" then
         nice = 3
@@ -1075,7 +1093,7 @@ function kernel.execve(path, env, nice, arguments)
     end
     
     if type(env) ~= "table" then
-        env = table.deepcopy(kernel.env)
+        env = kernel.createProcessEnvironment()
     end
     
     if type(nice) ~= "number" then
@@ -1242,7 +1260,7 @@ function kernel.addThread(func)
     local pos = #kernel_threads + 1
     if type(func) == "function" then
         if setfenv then
-            local nenv = table.deepcopy(kernel.env)
+            local nenv = kernel.createProcessEnvironment()
             nenv.exit = function ()
                 table.insert(exits, pos)
             end
@@ -1265,7 +1283,7 @@ while kernel.running do
         for index, value in ipairs(kernel.eventhandlers) do
             if type(value.func) == "function" then
                 if setfenv then
-                    local nenv = table.deepcopy(kernel.env)
+                    local nenv = kernel.createProcessEnvironment()
                     nenv.exit = function ()
                         table.insert(exits, index)
                     end
@@ -1383,12 +1401,41 @@ kernel.stop()
 end, bios.debug.traceback)
 
 if not s then
-    printf("Kernel has exited on error.", e)
-    if debug == true then
-        local file = bios.native.fs.open("/panic.txt", "w+")
-        if file ~= nil then
-            file.write(e or "No Error")
-            file.close()
+    local error_message = "Kernel internal error: "
+    local e_str = "Unknown error type"
+    if type(e) == "table" then
+        if _G.textutils and _G.textutils.serialiseJSON then
+            e_str = _G.textutils.serialiseJSON(e)
+        else
+            e_str = "error table (no textutils.serialiseJSON)"
+        end
+    elseif type(e) == "string" then
+        e_str = e
+    elseif e == nil then
+        e_str = "nil error object"
+    else
+        e_str = "non-string, non-table error object (" .. type(e) .. ")"
+    end
+    error_message = error_message .. e_str
+
+    if _G.log then
+        _G.log(error_message)
+    elseif _G.print then
+        _G.print(error_message)
+    end
+
+    if debug == true then -- 'debug' is a local var at the top of kernel.lua, should be true
+        if _G.bios and _G.bios.native and _G.bios.native.fs and _G.bios.native.fs.open then
+            local file = _G.bios.native.fs.open("/kernel_debug_panic.txt", "w+")
+            if file then
+                file:write(error_message .. "\nTraceback:\n" .. (_G.bios.debug.traceback and _G.bios.debug.traceback() or "no traceback"))
+                file:close()
+                if _G.log then _G.log("Wrote kernel error to /kernel_debug_panic.txt") end
+            else
+                if _G.log then _G.log("Failed to open /kernel_debug_panic.txt for writing.") end
+            end
+        else
+            if _G.log then _G.log("bios.native.fs.open not available for panic log.") end
         end
     end
 end
