@@ -11,8 +11,12 @@ local module_info = {
 local devfs = {}
 local devices = {}
 
-function devfs.register(name, dev, value)
-    local path = fs.combine("/dev", name)
+function devfs.register(name, dev, folder, value)
+    folder = fs.combine("/dev", folder)
+    local path = fs.combine(folder, name)
+    if not fs.exists(folder) then
+        fs.makeDirectory(folder)
+    end
     local file = fs.open(path, "w")
     file:write(value)
     file:close()
@@ -34,6 +38,7 @@ end
 
 local function unload()
     devices = {}
+    fs.remove("/dev")
 end
 
 return devfs, module_info, load, unload
