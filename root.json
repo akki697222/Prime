@@ -1,0 +1,236 @@
+{
+    "/lib/modules/kernel/": {
+        "mtime": 6751645.2,
+        "ctime": 6751645.2,
+        "btime": 6751645.2,
+        "atime": 6751645.2,
+        "id": 1,
+        "permission": [
+            777,
+            777,
+            777
+        ],
+        "size": 0
+    },
+    "/etc/modules.json": {
+        "mtime": 7144506.0,
+        "ctime": 7144506.0,
+        "btime": 7144506.0,
+        "atime": 7144506.0,
+        "id": 1,
+        "permission": [
+            777,
+            777,
+            777
+        ],
+        "size": 71
+    },
+    "/etc/lib/": {
+        "mtime": 7144509.6,
+        "ctime": 7144509.6,
+        "btime": 7144509.6,
+        "atime": 7144509.6,
+        "id": 1,
+        "permission": [
+            777,
+            777,
+            777
+        ],
+        "size": 0
+    },
+    "/dev/etc/": {
+        "mtime": 7339032.0,
+        "ctime": 7339032.0,
+        "btime": 7339032.0,
+        "atime": 7339032.0,
+        "id": 1,
+        "permission": [
+            777,
+            777,
+            777
+        ],
+        "size": 0
+    },
+    "/etc/": {
+        "mtime": 7144498.8,
+        "ctime": 7144498.8,
+        "btime": 7144498.8,
+        "atime": 7144498.8,
+        "id": 1,
+        "permission": [
+            777,
+            777,
+            777
+        ],
+        "size": 0
+    },
+    "/lib/modules/kernel/driver/gpu.lua": {
+        "mtime": 7166725.2,
+        "ctime": 7166725.2,
+        "btime": 7166725.2,
+        "atime": 7166725.2,
+        "id": 1,
+        "permission": [
+            777,
+            777,
+            777
+        ],
+        "size": 261
+    },
+    "/dev/": {
+        "mtime": 7339024.8,
+        "ctime": 7339024.8,
+        "btime": 7339024.8,
+        "atime": 7339024.8,
+        "id": 1,
+        "permission": [
+            777,
+            777,
+            777
+        ],
+        "size": 0
+    },
+    "/lib/modules/kernel/devfs.lua/driver/": {
+        "mtime": 6751656.0,
+        "ctime": 6751656.0,
+        "btime": 6751656.0,
+        "atime": 6751656.0,
+        "id": 1,
+        "permission": [
+            777,
+            777,
+            777
+        ],
+        "size": 0
+    },
+    "/aaa.txt": {
+        "mtime": 6179209.2,
+        "ctime": 6179209.2,
+        "btime": 6179209.2,
+        "atime": 6179209.2,
+        "id": 1,
+        "permission": [
+            777,
+            777,
+            777
+        ],
+        "size": 3
+    },
+    "/dev": {
+        "mtime": 7504671.6,
+        "permission": [
+            777,
+            777,
+            777
+        ],
+        "btime": 7504671.6,
+        "atime": 7504671.6,
+        "id": 1,
+        "size": 0,
+        "ctime": 7504671.6
+    },
+    "/lib/modules/kernel/devfs.lua": {
+        "mtime": 6751652.4,
+        "ctime": 6751652.4,
+        "btime": 6751652.4,
+        "atime": 6751652.4,
+        "id": 1,
+        "permission": [
+            777,
+            777,
+            777
+        ],
+        "size": 0
+    },
+    "/lib/": {
+        "mtime": 6751630.8,
+        "ctime": 6751630.8,
+        "btime": 6751630.8,
+        "atime": 6751630.8,
+        "id": 1,
+        "permission": [
+            777,
+            777,
+            777
+        ],
+        "size": 0
+    },
+    "/dev/etc/lib/": {
+        "mtime": 7339035.6,
+        "ctime": 7339035.6,
+        "btime": 7339035.6,
+        "atime": 7339035.6,
+        "id": 1,
+        "permission": [
+            777,
+            777,
+            777
+        ],
+        "size": 0
+    },
+    "/lib/modules/kernel/devfs.lua/driver/tty/": {
+        "mtime": 6751659.6,
+        "ctime": 6751659.6,
+        "btime": 6751659.6,
+        "atime": 6751659.6,
+        "id": 1,
+        "permission": [
+            777,
+            777,
+            777
+        ],
+        "size": 0
+    },
+    "/dev/gpu1/gpu2": {
+        "mtime": 7495552.8,
+        "ctime": 7495552.8,
+        "btime": 7495552.8,
+        "atime": 7495552.8,
+        "id": 1,
+        "permission": [
+            777,
+            777,
+            777
+        ],
+        "size": 0
+    },
+    "/dev/gpu2": {
+        "mtime": 7504682.4,
+        "ctime": 7493504.4,
+        "btime": 7493504.4,
+        "atime": 7493504.4,
+        "id": 1,
+        "permission": [
+            777,
+            777,
+            777
+        ],
+        "size": 0
+    },
+    "/dev/gpu1": {
+        "mtime": 7504678.8,
+        "ctime": 7493497.2,
+        "btime": 7493497.2,
+        "atime": 7493497.2,
+        "id": 1,
+        "permission": [
+            777,
+            777,
+            777
+        ],
+        "size": 0
+    },
+    "/lib/modules/": {
+        "mtime": 6751638.0,
+        "ctime": 6751638.0,
+        "btime": 6751638.0,
+        "atime": 6751638.0,
+        "id": 1,
+        "permission": [
+            777,
+            777,
+            777
+        ],
+        "size": 0
+    }
+}
