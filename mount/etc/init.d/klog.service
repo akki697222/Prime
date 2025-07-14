@@ -1,6 +1,0 @@
-{
-    "path": "/bin/klog.lua",
-    "name": "klog",
-    "desc": "test",
-    "arguments": ["test"]
-}

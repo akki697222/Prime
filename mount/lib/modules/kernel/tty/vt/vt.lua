@@ -22,6 +22,14 @@ function vt.create(tty_id)
         fbcon.print(...)
     end
 
+    function obj:write(...)
+        fbcon.write(...)
+    end
+
+    function obj:backspace()
+        fbcon.removeChar(1)
+    end
+
     ---@return std
     function obj:std()
         ---@type std
@@ -31,14 +39,14 @@ function vt.create(tty_id)
                 fbcon.print(string.format(fmt, ...))
             end,
             write = fbcon.write,
-            read = function ()
+            read = function (hideChars)
                 tty:setCanonical(true)
-                local result = tty:read()
+                local result = tty:read(hideChars)
                 tty:setCanonical(false)
                 return result
             end,
-            readline = function ()
-                return tty:read()
+            readline = function (hideChars)
+                return tty:read(hideChars)
             end
         }
         return std

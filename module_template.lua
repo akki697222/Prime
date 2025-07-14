@@ -1,5 +1,3 @@
--- Module Template
---[[
 ---@type os_env
 _ENV = _ENV
 
@@ -21,4 +19,3 @@ local function unload()
 end
 
 return module, module_info, load, unload
-]]

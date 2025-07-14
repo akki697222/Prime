@@ -23,7 +23,8 @@ function tty.create(id)
         pressing = {},
         reading = false,
         flags = {
-            canonical = true
+            canonical = true,
+            disableWriteCharInput = false
         },
         terminal = nil,
     }
@@ -38,16 +39,21 @@ function tty.create(id)
                 self.pressing[key_code] = true
 
                 if self.flags.canonical and char_code then
-                    printk(string.char(char_code) .. " " .. char_code)
-                    if char_code == 10 then
-                        self.reading = false               
+                    --printk(string.char(char_code) .. " " .. char_code)
+                    if char_code == 13 then
+                        self.reading = false
                     elseif char_code == 8 then
-                        printk("b")
-                        self.buffer = self.buffer:sub(1, -2)
-                    else
+                        if self.buffer ~= "" then
+                            self.buffer = self.buffer:sub(1, -2)
+                            self.terminal:backspace()
+                        end
+                    elseif char_code >= 32 and char_code <= 126 then
                         self.buffer = self.buffer .. string.char(char_code)
+                        if self.reading and not self.disableWriteCharInput then
+                            self.terminal:write(string.char(char_code))
+                        end
                     end
-                elseif not self.flags.canonical and char_code then
+                elseif not self.flags.canonical and char_code and char_code ~= 0 then
                     self.buffer = self.buffer .. string.char(char_code)
                 end
             end
@@ -69,16 +75,19 @@ function tty.create(id)
         self.buffer = self.buffer .. tostring(data)
     end
 
-    function obj:read()
+    function obj:read(disableWriteCharInput)
         if self.terminal then
             fbcon.blinking = true
             self.reading = true
+            self.disableWriteCharInput = disableWriteCharInput
             while self.reading do
                 coroutine.yield()
             end
             local buffer_copy = self.buffer
             self.buffer = ""
             fbcon.blinking = false
+            self.disableWriteCharInput = false
+            self.terminal:print()
             return buffer_copy
         end
     end
