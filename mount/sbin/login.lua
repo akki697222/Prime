@@ -1,21 +1,18 @@
 ---@type os_env
 _ENV = _ENV
 
-local max_attempts = 3
-local attempts = 0
-
-while attempts < max_attempts do
+while true do
     std.write("Login: ")
     local username = std.readline()
 
     std.write("Password: ")
     local password = std.readline(true)
     std.print()
-
-    if not user.login(username, password) then
-        std.print("Login failed.\n")
-        attempts = attempts + 1
+    local usr = user.switchuser(username, password)
+    if usr then
+        local shell_pid = process.exec(usr.shell, { usr.home }, 0)
+        os.waitProcess(shell_pid)
     else
-        break
+        std.print("Login failed.\n")
     end
 end

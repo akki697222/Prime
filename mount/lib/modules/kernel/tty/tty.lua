@@ -121,7 +121,7 @@ local function load()
         tty.create(i)
     end
     event.addEventHandler(function(ev)
-        tty.get(kernel.tty):handleEvent(ev)
+        tty.get(os.getty()):handleEvent(ev)
     end)
 end
 

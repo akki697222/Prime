@@ -11,10 +11,13 @@ function nonnil(value)
         return value
     end
 end
+
 --getting computer components
 local components = {}
 components.filesystem = component.proxy(computer.getBootAddress())
 components.gpu = component.proxy(component.list("gpu")())
+
+local _os = os
 
 --classes
 ---@class fs
@@ -29,12 +32,17 @@ local device = {}
 local event = {}
 ---@class timer
 local timer = {}
+---@class group
+local group = {}
 ---@class process
 local process = {}
 ---@class user
 local user = {}
 ---@class permission
 local permission = {}
+--- An 'OS' API to replace the kernel without directly providing it to a program
+---@class os
+local os = {}
 ---@class kernel
 local kernel = {}
 
@@ -219,6 +227,12 @@ function fs.getHandle(id)
     return fs._handles[id]
 end
 
+function fs.closeAllHandles()
+    for key, value in pairs(fs._handles) do
+        components.filesystem.close(value.handle)
+    end
+end
+
 function fs.attributes(path)
     path = fs_rootnize_cwd(path)
     return fs._inode[path] or fs.createInode(path)
@@ -227,22 +241,23 @@ end
 function fs.createInode(path)
     local root_path = fs_combinemount(path)
     local size = 0
+    local time = components.filesystem.lastModified(root_path)
     if components.filesystem.exists(root_path) then
         size = components.filesystem.size(root_path)
     end
     local u = nil
     if kernel.currentUser > -1 then
-        u = user.getUserFromUID(kernel.currentUser)
+        u = user.getUserByUID(kernel.currentUser)
     end
     ---@class inode
     local inode = {
         mode = fs.isDirectory(path) and 755 or 644,
         uid = u and u.uid or 0,
         gid = u and u.gid or 0,
-        atime = os.time(),
-        mtime = os.time(),
-        ctime = os.time(),
-        btime = os.time(),
+        atime = time,
+        mtime = time,
+        ctime = time,
+        btime = time,
         id = #fs._inode + 1,
         size = size
     }
@@ -268,7 +283,7 @@ function fs.isDirectory(path)
     return components.filesystem.isDirectory(fs_combinemount(path))
 end
 
----@param mode fs_mode
+---@param mode? fs_mode
 function fs.open(path, mode)
     local root_path = fs_combinemount(path)
     mode = mode or "r"
@@ -802,12 +817,12 @@ function fbcon.reset()
     fbcon._blinkertid = kernel.createThread(function()
         while true do
             if fbcon._blinkstate then
-                timer.set(100, 500)
+                timer.set(100, 5)
                 if timer.check(100) then
                     fbcon._blinkstate = false
                 end
             else
-                timer.set(100, 500)
+                timer.set(100, 5)
                 if timer.check(100) then
                     fbcon._blinkstate = true
                 end
@@ -925,7 +940,9 @@ function fbcon.getstd()
 end
 
 function printk(...)
-    fbcon.print(string.format("[%8.2f] %s", uptime(), tostring(...)))
+    local msg = string.format("[%8.2f] %s", uptime(), tostring(...))
+    fbcon.print(msg)
+    table.insert(kernel.log_buffer, msg)
 end
 
 function panic(err, reason)
@@ -1056,6 +1073,13 @@ function module.getInfo(name)
     return nil
 end
 
+function module.unloadAll()
+    for key, value in pairs(module.loaded) do
+        value.unload()
+        module.loaded[key] = nil
+    end
+end
+
 ------------------------------------------
 --- Component API Wrapper for security ---
 ------------------------------------------
@@ -1134,6 +1158,149 @@ function process.cwd(path)
     end
 end
 
+function process.getCurrentPID()
+    return kernel.currentProcess
+end
+
+function process.exec(path, args, nice, env, pid)
+    return kernel.exec(path, args, nice, env, pid)
+end
+
+function process.execf(func, name, args, nice, env, pid)
+    return kernel.execf(func, name, args, nice, env, pid)
+end
+
+-----------------
+--- Group API ---
+-----------------
+
+---@class user_group
+---@field name string
+---@field gid integer
+---@field members string[]
+
+---@type user_group[]
+group._groups = {}
+
+local function group_load_group()
+    local file = fs.open("/etc/group")
+    local content = file:readAll()
+    file:close()
+
+    local groups = {}
+    for line in content:gmatch("[^\r\n]+") do
+        local groupname, groupid, member_str = line:match("^([^:]+):([^:]*):([^:]*)$")
+        if not groupname or not groupid then
+            return nil
+        end
+
+        local members = {}
+        for member in member_str:gmatch("([^,]+)") do
+            table.insert(members, member)
+        end
+        if group then
+            table.insert(groups, {
+                name = groupname,
+                gid = tonumber(groupid),
+                members = members
+            })
+        end
+    end
+
+    group._groups = groups
+end
+
+function group.updateGroups()
+    if not fs.exists("/etc/group") then
+        return nil, "/etc/group does not exist"
+    end
+
+    local file = fs.open("/etc/group", "r")
+    if not file then
+        return nil, "cannot open /etc/group for reading"
+    end
+
+    local content = file:readAll()
+    file:close()
+
+    local groups = {}
+    for line in content:gmatch("[^\r\n]+") do
+        local groupname, groupid, member_str = line:match("^([^:]+):([^:]*):([^:]*)$")
+        if groupname and groupid then
+            local members = {}
+            for member in member_str:gmatch("([^,]+)") do
+                if member ~= "" then
+                    table.insert(members, member)
+                end
+            end
+
+            table.insert(groups, {
+                name = groupname,
+                gid = tonumber(groupid),
+                members = members
+            })
+        end
+    end
+
+    group._groups = groups
+    return true
+end
+
+function group.addUser(groupname, username)
+    if not user.getUser(username) then
+        error("User " .. username .. " does not exists.")
+    else
+        local gr = group.getGroup(groupname)
+        table.insert(gr.members, username)
+        group.updateGroups()
+    end
+end
+
+function group.create(groupname, gid, users)
+    gid = gid or 1000
+    
+    local group_line = table.concat({
+        groupname,
+        gid,
+        table.concat(users, ",")
+    }, ":")
+
+    local passwd_file, e = fs.open("/etc/group", "a")
+    if not passwd_file then return nil, "cannot open /etc/group: " .. e end
+    passwd_file:write(group_line .. "\n")
+    passwd_file:close()
+
+    group_load_group()
+end
+
+function group.getGroup(groupname)
+    for index, value in ipairs(group._groups) do
+        if value.name == groupname then
+            return value
+        end
+    end
+end
+
+function group.getGroupByGID(gid)
+    for _, value in ipairs(group._groups) do
+        if value.gid == gid then
+            return value
+        end
+    end
+end
+
+function group.init()
+    user.updateUsers()
+    local root_group_line = "root:0:root\n"
+    if not fs.exists("/etc/group") then
+        local file = fs.open("/etc/group", "w")
+        file:write(root_group_line)
+        file:close()
+    end
+    group_load_group()
+    fs.setPermission("/etc/group", 644)
+end
+
 ----------------
 --- User API ---
 ----------------
@@ -1161,7 +1328,10 @@ end
 user._users = {}
 
 local function user_getShadows()
+    local back = kernel.currentUser
+    kernel.currentUser = 0
     local file = fs.open("/etc/shadow")
+    kernel.currentUser = back
     if not file then return nil, "cannot open /etc/shadow" end
 
     local content = file:readAll()
@@ -1203,6 +1373,10 @@ local function user_getShadow(username)
     return nil, "user not found"
 end
 
+function user.checkRoot()
+    return kernel.currentUser == 0
+end
+
 function user.updateUsers()
     local file = fs.open("/etc/passwd")
     if not file then return nil, "cannot open /etc/passwd" end
@@ -1213,14 +1387,14 @@ function user.updateUsers()
     local users = {}
     for line in content:gmatch("[^\r\n]+") do
         local username, password, uid, gid, gecos, home, shell = line:match(
-        "^([^:]+):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*)")
+            "^([^:]+):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*):([^:]*)")
 
         if username then
             table.insert(users, {
                 username = username,
                 password = password,
-                uid = tonumber(uid) or nil,
-                gid = tonumber(gid) or nil,
+                uid = tonumber(uid),
+                gid = tonumber(gid),
                 gecos = gecos,
                 home = home,
                 shell = shell
@@ -1242,8 +1416,13 @@ function user.getUser(username)
 end
 
 function user.create(username, password, uid, gid, gecos, shell)
-    uid = uid or 1000
-    gid = gid or 1000
+    uid = uid or 100
+    gid = gid or uid
+
+    if not group.getGroupByGID(uid) then
+        group.create(username, gid, {username})
+    end
+
     gecos = gecos or ""
     shell = shell or "/bin/posh.lua"
 
@@ -1258,7 +1437,7 @@ function user.create(username, password, uid, gid, gecos, shell)
     }, ":")
 
     local hash = sha2.sha512(password)
-    local last_change = math.floor(os.time() / (24 * 60 * 60))
+    local last_change = os.time()
     local min_days = 0
     local max_days = 99999
     local warn_days = 7
@@ -1295,7 +1474,7 @@ function user.create(username, password, uid, gid, gecos, shell)
     fs.makeDirectory("/home/" .. username)
 end
 
-function user.getUserFromUID(uid)
+function user.getUserByUID(uid)
     for _, entry in ipairs(user._users) do
         if entry.uid == uid then
             return entry
@@ -1315,20 +1494,20 @@ function user.checkPasswordCorrect(username, passwd)
 end
 
 function user.getCurrent()
-    return user.getUserFromUID(kernel.currentUser)
+    return user.getUserByUID(kernel.currentUser)
 end
 
-function user.login(username, passwd)
-    if user.checkPasswordCorrect(username, passwd) then
+---@return user_passwd|nil
+function user.switchuser(username, password)
+    if user.checkPasswordCorrect(username, password) then
         ---@type user_passwd
-        local user = user.getUser(username)
+        local usr = user.getUser(username)
 
-        kernel.currentUser = user.uid
-        kernel.exec(user.shell, {user.home}, 0)
+        kernel.currentUser = usr.uid
 
-        return true
+        return usr
     else
-        return false
+        return nil
     end
 end
 
@@ -1374,61 +1553,173 @@ local function band(a, b)
     end
 end
 
-local function splitPerm(perm)
+local function splitFullPerm(perm)
     perm = tonumber(perm)
-    if not perm then return 0, 0, 0 end
+    if not perm then return 0, 0, 0, 0 end
+    local s = math.floor(perm / 1000) % 10
     local o = math.floor(perm / 100) % 10
     local g = math.floor(perm / 10) % 10
     local t = perm % 10
-    return o, g, t
+    return o, g, t, s
 end
 
 -- Owner
 function permission.canOwnerRead(perm)
-    local o = splitPerm(perm)
+    local o = splitFullPerm(perm)
     return band(o, 4) ~= 0
 end
 
 function permission.canOwnerWrite(perm)
-    local o = splitPerm(perm)
+    local o = splitFullPerm(perm)
     return band(o, 2) ~= 0
 end
 
 function permission.canOwnerExec(perm)
-    local o = splitPerm(perm)
+    local o = splitFullPerm(perm)
     return band(o, 1) ~= 0
 end
 
 -- Group
 function permission.canGroupRead(perm)
-    local _, g = splitPerm(perm)
+    local _, g = splitFullPerm(perm)
     return band(g, 4) ~= 0
 end
 
 function permission.canGroupWrite(perm)
-    local _, g = splitPerm(perm)
+    local _, g = splitFullPerm(perm)
     return band(g, 2) ~= 0
 end
 
 function permission.canGroupExec(perm)
-    local _, g = splitPerm(perm)
+    local _, g = splitFullPerm(perm)
     return band(g, 1) ~= 0
 end
 
 -- Other
 function permission.canOtherRead(perm)
-    local _, _, t = splitPerm(perm)
+    local _, _, t = splitFullPerm(perm)
     return band(t, 4) ~= 0
 end
 
 function permission.canOtherWrite(perm)
-    local _, _, t = splitPerm(perm)
+    local _, _, t = splitFullPerm(perm)
     return band(t, 2) ~= 0
 end
 
 function permission.canOtherExec(perm)
-    local _, _, t = splitPerm(perm)
+    local _, _, t = splitFullPerm(perm)
     return band(t, 1) ~= 0
+end
+
+function permission.canSetUID(perm)
+    local _, _, _, s = splitFullPerm(perm)
+    return band(s, 4) ~= 0
+end
+
+function permission.canSetGID(perm)
+    local _, _, _, s = splitFullPerm(perm)
+    return band(s, 2) ~= 0
+end
+
+function permission.canSticky(perm)
+    local _, _, _, s = splitFullPerm(perm)
+    return band(s, 1) ~= 0
+end
+
+---------------------------------------------------------
+--- OS API (replaces kernel api for usermode program) ---
+---------------------------------------------------------
+
+os.clock = _os.clock
+os.date = _os.date
+os.difftime = _os.difftime
+
+function os.time()
+    return _os.time() / 72
+end
+
+function os.getenv(name)
+    if fs.exists("/etc/environment") then
+        local file, err = fs.open("/etc/environment")
+        local content = file:readAll()
+        file:close()
+
+        for line in content:gmatch("[^\r\n]+") do
+            line = line:match("^%s*(.-)%s*$")
+            if line ~= "" and not line:match("^#") then
+                local key, val = line:match('^([%w_]+)%s*=%s*"(.-)"$')
+                if not key then
+                    key, val = line:match('^([%w_]+)%s*=%s*(.-)$')
+                end
+                if key and val and key == name then
+                    return val
+                end
+            end
+        end
+    end
+    return nil
+end
+
+function os.getpath()
+    local paths = {}
+    local PATH = os.getenv("PATH")
+    if PATH then
+        for entry in PATH:gmatch("[^:]+") do
+            table.insert(paths, entry)
+        end
+    end
+    return paths
+end
+
+---@return integer #current tty id
+function os.getty()
+    return kernel.tty
+end
+
+function os.getKernelLogBuffer()
+    return kernel.log_buffer
+end
+
+function os.reboot()
+    kernel.shutdown(true)
+end
+
+function os.waitProcess(pid)
+    while true do
+        if not kernel.getProcess(pid) then
+            break
+        end
+        coroutine.yield()
+    end
+end
+
+function os.findExecutable(command, findpath)
+    local candidates = { command, command .. ".lua" }
+
+    if fs.exists(command) then
+        return command
+    elseif fs.exists(command .. ".lua") then
+        return command .. ".lua"
+    end
+
+    for _, base in ipairs(findpath) do
+        for _, name in ipairs(candidates) do
+            local full = fs.combine(base, name)
+            if fs.exists(full) then
+                return full
+            end
+        end
+    end
+
+    local cwd = process.cwd()
+    for _, name in ipairs(candidates) do
+        local full = fs.combine(cwd, name)
+        if fs.exists(full) then
+            return full
+        end
+    end
+
+    return nil
 end
 
 ---------------------------------
@@ -1455,6 +1746,7 @@ kernel.currentUser = -1
 kernel.activeTerminal = 0
 ---@type table<terminal>
 kernel.terminals = {}
+kernel.log_buffer = {}
 
 local used_pids = {}
 
@@ -1513,12 +1805,6 @@ function kernel.getEnv()
             getupvalue = debug.getupvalue
         },
         math = math,
-        os = {
-            clock = os.clock,
-            date = os.date,
-            difftime = os.difftime,
-            time = os.time
-        },
         string = string,
         table = table,
         utf8 = utf8,
@@ -1531,12 +1817,32 @@ function kernel.getEnv()
         module = module,
         fbcon = fbcon,
         event = event,
-        kernel = kernel,
+        os = os,
         timer = timer,
         process = process,
         json = json,
         argparse = argparse,
         user = user,
+        group = group,
+        permission = permission,
+        styledPrint = function(printTable)
+            local len = {}
+            for _, row in ipairs(printTable) do
+                for i, col in ipairs(row) do
+                    local str = tostring(col)
+                    len[i] = math.max(len[i] or 0, #str)
+                end
+            end
+
+            for _, row in ipairs(printTable) do
+                for i, col in ipairs(row) do
+                    local str = tostring(col)
+                    kernel.std.write(str)
+                    kernel.std.write((" "):rep(len[i] - #str + 1))
+                end
+                kernel.std.write("\n")
+            end
+        end
     }
 
     env._G = env
@@ -1581,6 +1887,19 @@ function kernel.exec(path, args, nice, env, pid)
     return pid
 end
 
+function kernel.shutdown(reboot)
+    module.unloadAll()
+    fs.closeAllHandles()
+    table.sort(kernel.process, function(a, b)
+        return a.pid > b.pid
+    end)
+    for index, value in ipairs(kernel.process) do
+        table.remove(kernel.process, index)
+    end
+    kernel.process = {}
+    computer.shutdown(reboot)
+end
+
 ---@param func function
 ---@param name string
 ---@param args table|nil
@@ -1610,15 +1929,6 @@ function kernel.execf(func, name, args, nice, env, pid)
     table.insert(kernel.process, entry)
 
     return pid
-end
-
-function kernel.waitProcess(pid)
-    while true do
-        if not kernel.getProcess(pid) then
-            break
-        end
-        coroutine.yield()
-    end
 end
 
 function kernel.killProcess(pid)
@@ -1766,6 +2076,7 @@ local function boot()
     fbcon.reset()
     fs_init_inode()
     kernel.std = fbcon.getstd()
+    group.init()
     user.init()
 
     -- startup message

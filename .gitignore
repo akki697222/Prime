@@ -1,1 +1,7 @@
 mount/dev
+root.json
+mount/proc
+mount/etc/passwd
+mount/etc/group
+mount/etc/shadow
+mount/etc/init.d/firstboot

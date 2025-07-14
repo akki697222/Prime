@@ -4,7 +4,7 @@ local os_name = args[1]
 ---@type os_env
 _ENV = _ENV
 
-if kernel.currentProcess ~= 1 then
+if process.getCurrentPID() ~= 1 then
     std.print("init already running")
     return
 end
@@ -49,11 +49,11 @@ local fail = colors.bright_blue .. "[" .. colors.red .. "fail" .. colors.bright_
 function init.start(service)
     init.log(0, "Starting " .. service.name .. " ...")
 
-    local s, e = pcall(kernel.exec, service.path, service.arguments or nil)
-    if not s then
+    local pid, err = process.exec(service.path, service.arguments or nil)
+    if pid == -1 then
         fbcon.writeTo(fbcon.width - 6, fbcon.y, fail)
         std.print()
-        init.log(1, service.name .. " failed: " .. e .. "\n")
+        init.log(1, service.name .. " failed: " .. err .. "\n")
     else
         fbcon.writeTo(fbcon.width - 6, fbcon.y, ok)
         std.print()
@@ -107,7 +107,11 @@ end
 
 function init.makeBinExecutable()
     for index, value in ipairs(fs.list("/bin")) do
-        fs.setPermission(fs.combine("/bin", value), 755)
+        if value == "sudo.lua" or value == "sudo" then
+            fs.setPermission(fs.combine("/bin", value), 4755)
+        else
+            fs.setPermission(fs.combine("/bin", value), 755)
+        end
     end
 end
 
