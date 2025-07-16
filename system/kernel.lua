@@ -349,17 +349,22 @@ function fs.open(path, mode)
     return file, nil
 end
 
----@param mode fs_mode
+--- @param mode fs_mode
 function fs.checkPermission(path, mode)
-    if kernel.currentUser <= 0 then
+    local proc = kernel.getCurrentProcess() or {suid = 0, euid = 0, uid = 0}
+    if proc.euid == 0 then 
         return true
     end
-    ---@type inode
+    --- @type inode
     local inode = fs.attributes(path)
-    ---@type user_passwd
+    --- @type user_passwd
     local usr = nonnil(user.getCurrent())
-
-    if inode.uid == usr.uid then
+    if permission.canSetUID(inode.mode) and inode.uid == proc.euid then
+        return true 
+    elseif permission.canSetGID(inode.mode) and inode.gid == usr.gid then
+        return true 
+    end
+    if inode.uid == proc.euid then
         if mode == "r" or mode == "rb" then
             return permission.canOwnerRead(inode.mode)
         else
@@ -382,14 +387,22 @@ end
 
 ---@param action fs_action
 function fs.canAction(path, action)
-    if kernel.currentUser <= 0 then
+    local proc = kernel.getCurrentProcess() or {suid = 0, euid = 0, uid = 0}
+    --- @type user_passwd
+    local usr = nonnil(user.getCurrent())
+    if proc.euid == 0 then 
         return true
     end
-    ---@type inode
+    if usr.uid == 0 then
+        return true
+    end
+    --- @type inode
     local inode = fs.attributes(path)
-    ---@type user_passwd
-    local usr = nonnil(user.getCurrent())
-
+    if permission.canSetUID(inode.mode) or inode.uid == proc.euid then
+        return true 
+    elseif permission.canSetGID(inode.mode) or inode.gid == usr.gid then
+        return true 
+    end
     if inode.uid == usr.uid then
         if action == "r" then
             return permission.canOwnerRead(inode.mode)
@@ -1149,6 +1162,45 @@ end
 --- Process API ---
 -------------------
 
+---@class signal
+process.signals = {
+    SIGHUP    = 1,  -- Hangup detected on controlling terminal or death of controlling process
+    SIGINT    = 2,  -- Interrupt from keyboard (Ctrl+C)
+    SIGQUIT   = 3,  -- Quit from keyboard
+    SIGILL    = 4,  -- Illegal Instruction
+    SIGTRAP   = 5,  -- Trace/breakpoint trap
+    SIGABRT   = 6,  -- Abort signal from abort(3)
+    SIGBUS    = 7,  -- Bus error (bad memory access)
+    SIGFPE    = 8,  -- Floating point exception
+    SIGKILL   = 9,  -- Kill signal (cannot be caught or ignored)
+    SIGUSR1   = 10, -- User-defined signal 1
+    SIGSEGV   = 11, -- Invalid memory reference
+    SIGUSR2   = 12, -- User-defined signal 2
+    SIGPIPE   = 13, -- Broken pipe: write to pipe with no readers
+    SIGALRM   = 14, -- Timer signal from alarm(2)
+    SIGTERM   = 15, -- Termination signal
+    SIGSTKFLT = 16, -- Stack fault on coprocessor (obsolete)
+    SIGCHLD   = 17, -- Child stopped or terminated
+    SIGCONT   = 18, -- Continue if stopped
+    SIGSTOP   = 19, -- Stop process (cannot be caught or ignored)
+    SIGTSTP   = 20, -- Stop typed at tty (Ctrl+Z)
+    SIGTTIN   = 21, -- tty input for background process
+    SIGTTOU   = 22, -- tty output for background process
+    SIGURG    = 23, -- Urgent condition on socket
+    SIGXCPU   = 24, -- CPU time limit exceeded
+    SIGXFSZ   = 25, -- File size limit exceeded
+    SIGVTALRM = 26, -- Virtual alarm clock
+    SIGPROF   = 27, -- Profiling timer expired
+    SIGWINCH  = 28, -- Window resize signal
+    SIGIO     = 29, -- I/O now possible
+    SIGPWR    = 30, -- Power failure (System V)
+    SIGSYS    = 31, -- Bad system call (SVr4)
+}
+
+function process.kill(pid)
+    return kernel.killProcess(pid)
+end
+
 function process.cwd(path)
     if path then
         kernel.getCurrentProcess().cwd = path
@@ -1158,8 +1210,38 @@ function process.cwd(path)
     end
 end
 
+function process.getCurrent()
+    return kernel.getCurrentProcess()
+end
+
 function process.getCurrentPID()
     return kernel.currentProcess
+end
+
+function process.seteuid(euid)
+    ---@type process_entry
+    local proc = kernel.getCurrentProcess()
+    local inode = fs.attributes(proc.path)
+    if not proc then
+        return nil, "No current process"
+    end
+    if permission.canSetUID(inode.mode) and inode.uid == 0 or inode.gid == 0 then
+        return true
+    end 
+    if euid == proc.uid or euid == proc.suid then
+        proc.euid = euid
+        return true
+    else
+        return nil, "Permission denied"
+    end
+end
+
+function process.geteuid()
+    local proc = kernel.getCurrentProcess()
+    if not proc then
+        return nil, "No current process"
+    end
+    return proc.euid
 end
 
 function process.exec(path, args, nice, env, pid)
@@ -1168,6 +1250,31 @@ end
 
 function process.execf(func, name, args, nice, env, pid)
     return kernel.execf(func, name, args, nice, env, pid)
+end
+
+---@param sig integer
+---@param handler fun()
+function process.setSignalHandler(sig, handler)
+    local proc = kernel.getCurrentProcess()
+    if not proc then
+        error("No current process")
+    end
+    if type(sig) ~= "number" then
+        error("Signal must be a number")
+    end
+    if type(handler) ~= "function" then
+        error("Handler must be a function")
+    end
+    proc.sig_handlers[tostring(sig)] = handler
+end
+
+function process.signal(pid, sig)
+    return kernel.signal(pid, sig)
+end
+
+---send signal to current process
+function process.signalCurrent(sig)
+    return kernel.signal(kernel.currentProcess, sig)
 end
 
 -----------------
@@ -1329,13 +1436,20 @@ user._users = {}
 
 local function user_getShadows()
     local back = kernel.currentUser
-    kernel.currentUser = 0
-    local file = fs.open("/etc/shadow")
-    kernel.currentUser = back
-    if not file then return nil, "cannot open /etc/shadow" end
+    local handle = components.filesystem.open(fs_combinemount("/etc/shadow"))
 
-    local content = file:readAll()
-    file:close()
+    local content = ""
+    while true do
+        local chunk, err = components.filesystem.read(handle, 1024)
+        if not chunk then
+            if err then
+                error(err)
+            end
+            break
+        end
+        content = content .. chunk
+    end
+    components.filesystem.close(handle)
 
     local shadows = {}
     for line in content:gmatch("[^\r\n]+") do
@@ -1504,6 +1618,10 @@ function user.switchuser(username, password)
         local usr = user.getUser(username)
 
         kernel.currentUser = usr.uid
+        local proc = kernel.getCurrentProcess()
+        proc.uid = kernel.currentUser
+        proc.euid = kernel.currentUser
+        proc.suid = kernel.currentUser
 
         return usr
     else
@@ -1684,9 +1802,13 @@ function os.reboot()
     kernel.shutdown(true)
 end
 
-function os.waitProcess(pid)
+---@param pid integer
+---@param timeout? integer
+function os.waitProcess(pid, timeout)
+    timeout = timeout or math.huge
     while true do
-        if not kernel.getProcess(pid) then
+        timer.set(pid + 10000, timeout * 10)
+        if not kernel.getProcess(pid) or timer.check(pid + 10000) then
             break
         end
         coroutine.yield()
@@ -1735,7 +1857,12 @@ end
 ---@field nice integer
 ---@field parent integer
 ---@field arguments table
+---@field uid integer
+---@field euid integer
+---@field suid integer
 ---@field cwd string
+---@field signals integer[]
+---@field sig_handlers table<integer, function>
 
 kernel._version = "1.0.1-dev-OC"
 ---@type table<process_entry>
@@ -1749,6 +1876,15 @@ kernel.terminals = {}
 kernel.log_buffer = {}
 
 local used_pids = {}
+
+local kernel_sig_handlers = {
+    [2] = function ()
+        kernel.killProcess(kernel.currentProcess)
+    end,
+    [15] = function ()
+        kernel.killProcess(kernel.currentProcess)
+    end
+}
 
 local function kernel_get_pid()
     local pid = 1
@@ -1850,6 +1986,26 @@ function kernel.getEnv()
     return env
 end
 
+---@param pid integer
+---@param sig integer
+function kernel.signal(pid, sig)
+    ---@type process_entry
+    local proc = kernel.getProcess(pid)
+    ---@type signal
+    local signals = process.signals
+    if not proc then
+        return false
+    end
+    if sig > 31 or sig < 1 then
+        return false
+    end
+    if sig == signals.SIGKILL or sig == signals.SIGSTOP then
+        kernel.killProcess(pid)
+    else
+        table.insert(proc.signals, sig)
+    end
+end
+
 ---@param path string
 ---@param args table|nil
 ---@param nice integer|nil
@@ -1869,6 +2025,7 @@ function kernel.exec(path, args, nice, env, pid)
     if kernel.getCurrentProcess() then
         cwd = kernel.getCurrentProcess().cwd
     end
+    local parent = kernel.getCurrentProcess() or { uid = 0, euid = 0, suid = 0 }
     ---@type process_entry
     local entry = {
         thread = coroutine.create(func),
@@ -1879,7 +2036,12 @@ function kernel.exec(path, args, nice, env, pid)
         nice = nice or 3,
         parent = kernel.currentProcess,
         arguments = args or {},
-        cwd = cwd
+        cwd = cwd,
+        uid = parent.uid,
+        euid = parent.euid,
+        suid = parent.suid,
+        signals = {},
+        sig_handlers = kernel_sig_handlers
     }
 
     table.insert(kernel.process, entry)
@@ -1888,16 +2050,7 @@ function kernel.exec(path, args, nice, env, pid)
 end
 
 function kernel.shutdown(reboot)
-    module.unloadAll()
-    fs.closeAllHandles()
-    table.sort(kernel.process, function(a, b)
-        return a.pid > b.pid
-    end)
-    for index, value in ipairs(kernel.process) do
-        table.remove(kernel.process, index)
-    end
-    kernel.process = {}
-    computer.shutdown(reboot)
+    event.push("shutdown", reboot)
 end
 
 ---@param func function
@@ -1913,6 +2066,7 @@ function kernel.execf(func, name, args, nice, env, pid)
     if kernel.getCurrentProcess() then
         cwd = kernel.getCurrentProcess().cwd
     end
+    local parent = kernel.getCurrentProcess() or { uid = 0, euid = 0, suid = 0 }
     ---@type process_entry
     local entry = {
         thread = coroutine.create(func),
@@ -1923,7 +2077,12 @@ function kernel.execf(func, name, args, nice, env, pid)
         nice = nice or 3,
         parent = kernel.currentProcess,
         arguments = args or {},
-        cwd = cwd
+        cwd = cwd,
+        uid = parent.uid,
+        euid = parent.euid,
+        suid = parent.suid,
+        signals = {},
+        sig_handlers = kernel_sig_handlers
     }
 
     table.insert(kernel.process, entry)
@@ -1935,8 +2094,10 @@ function kernel.killProcess(pid)
     for index, value in ipairs(kernel.process) do
         if value.pid == pid then
             table.remove(kernel.process, index)
+            return true
         end
     end
+    return false
 end
 
 function kernel.getProcess(pid)
@@ -1971,6 +2132,7 @@ end
 function kernel.createThread(func, name, nice)
     local pid = kernel_get_pid()
     if not func then return end
+    local parent = kernel.getCurrentProcess() or { uid = 0, euid = 0, suid = 0 }
     ---@type process_entry
     local entry = {
         thread = coroutine.create(func),
@@ -1981,7 +2143,12 @@ function kernel.createThread(func, name, nice)
         nice = nice or 3,
         parent = 2,
         arguments = {},
-        cwd = "/"
+        cwd = "/",
+        uid = parent.uid,
+        euid = parent.euid,
+        suid = parent.suid,
+        signals = {},
+        sig_handlers = kernel_sig_handlers
     }
 
     table.insert(kernel.threads, entry)
@@ -2002,18 +2169,48 @@ function kernel.main()
     kernel.currentUser = 0
     kernel.execf(kernel_thread_processor, "kthreadd", {}, -20, _ENV, 2)
     kernel.exec("/sbin/init.lua", { "PrimeOS (OpenComputers)" }, 0, _ENV, 1)
+    ---@param proc process_entry
+    local function process_signals(proc)
+        local handlers = {}
+        for sig, handler in pairs(proc.sig_handlers) do
+            handlers[tostring(sig)] = handler
+        end
+        for index, value in ipairs(proc.signals) do
+            local handle = handlers[tostring(value)]
+            if handle then
+                handle()
+            end
+        end
+    end
     while true do
         local ev = { computer.pullSignal(0.05) }
         table.sort(kernel.process, function(a, b)
             return a.nice < b.nice
         end)
+        if ev[1] == "shutdown" then
+            module.unloadAll()
+            fs.closeAllHandles()
+            table.sort(kernel.process, function(a, b)
+                return a.pid > b.pid
+            end)
+            for index, value in ipairs(kernel.process) do
+                kernel.signal(value.pid, 15)
+                os.waitProcess(value.pid, 5)
+                printk("Timeout process " .. value.pid)
+                kernel.killProcess(value.pid)
+            end
+            kernel.process = {}
+            computer.shutdown(ev[2])
+        end
         ---@type integer, process_entry
         for index, value in ipairs(kernel.process) do
             kernel.currentProcess = value.pid
             if coroutine.status(value.thread) == "dead" then
                 table.remove(kernel.process, index)
             else
+                process_signals(value)
                 local s, e = coroutine.resume(value.thread, table.unpack(value.arguments))
+                process_signals(value)
                 if not s then
                     printk("Process " .. value.pid .. " Exited on error: " .. e)
                 end

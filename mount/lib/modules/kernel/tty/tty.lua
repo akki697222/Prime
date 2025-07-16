@@ -13,6 +13,10 @@ local module_info = {
     depends = {"/lib/modules/kernel/devfs.lua"}
 }
 
+local special_keycodes = {
+    CTRL_T = 46
+}
+
 function tty.create(id)
     ---@type devfs
     local devfs = nonnil(module.getApi("devfs"))
@@ -35,11 +39,16 @@ function tty.create(id)
         local key_code = ev[4]
 
         if type == "key_down" then
+            --printk("strchar: " .. string.char(char_code) .. " char: " .. char_code .. " key: " .. key_code)
+            if key_code == special_keycodes.CTRL_T then
+                --printk("SIGINT to " .. process.getCurrentPID())
+                process.signalCurrent(process.signals.SIGINT)
+            end
+
             if not self.pressing[key_code] then
                 self.pressing[key_code] = true
 
                 if self.flags.canonical and char_code then
-                    --printk(string.char(char_code) .. " " .. char_code)
                     if char_code == 13 then
                         self.reading = false
                     elseif char_code == 8 then

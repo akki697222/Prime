@@ -130,7 +130,6 @@ init.start({
     path = "/sbin/login.lua",
     arguments = {}
 })
-
 while true do
     coroutine.yield()
 end

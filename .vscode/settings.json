@@ -44,6 +44,7 @@
   "cSpell.words": [
     "devfs",
     "fbcon",
+    "nonnil",
     "printk"
   ],
   "C_Cpp_Runner.cCompilerPath": "gcc",
