@@ -14,6 +14,10 @@ end
 local home = args[1] or "/root"
 process.cwd(home)
 
+process.setSignalHandler(process.signals.SIGINT, function ()
+    -- nop
+end)
+
 while true do
     local p = process.cwd()
     if p == home then

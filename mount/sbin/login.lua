@@ -1,6 +1,10 @@
 ---@type os_env
 _ENV = _ENV
 
+process.setSignalHandler(process.signals.SIGINT, function ()
+    -- nop
+end)
+
 while true do
     std.write("Login: ")
     local username = std.readline()

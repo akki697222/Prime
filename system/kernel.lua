@@ -1,6 +1,10 @@
-local boot_time = 0
+local bootRealTime
 local function uptime()
     return computer.uptime()
+end
+
+local function getRealTime()
+    return bootRealTime + computer.uptime()
 end
 
 ---no more nil
@@ -63,7 +67,10 @@ fs.internal = {}
 fs._mountpath = "/mount/"
 fs._handles = {}
 fs._init = false
-fs._inode = {}
+fs._inode = { index = 0 }
+fs._lookup_table = {}
+fs._reserved_lookup_table = {}
+fs.save_inode_lookup = true
 
 ---@alias fs_mode
 ---| '"r"'   # read
@@ -73,19 +80,40 @@ fs._inode = {}
 ---| '"a"'   # append
 ---| '"ab"'  # append (binary)
 
-
 ---@alias fs_action
 ---| '"r"'
 ---| '"w"'
 ---| '"x"'
 
+---@class inode
+---@field mode integer
+---@field uid integer
+---@field gid integer
+---@field atime integer
+---@field mtime integer
+---@field ctime integer
+---@field btime integer
+---@field id string
+---@field size integer
+---@field directory boolean
+---@field children string[]
+---@field parent string
+
 local function fs_update_inode_file()
-    if components.filesystem.exists("root.json") then
-        components.filesystem.remove("root.json")
+    if components.filesystem.exists("inode.json") then
+        components.filesystem.remove("inode.json")
     end
-    local handle = components.filesystem.open("root.json", "w")
-    components.filesystem.write(handle, json.encode(fs._inode))
+    local handle = components.filesystem.open("inode.json", "w")
+    components.filesystem.write(handle, json.encode(fs._inode, { indent = true }))
     components.filesystem.close(handle)
+    if fs.save_inode_lookup then
+        if components.filesystem.exists("inode_lookup.json") then
+            components.filesystem.remove("inode_lookup.json")
+        end
+        local handle = components.filesystem.open("inode_lookup.json", "w")
+        components.filesystem.write(handle, json.encode(fs._lookup_table, { indent = true }))
+        components.filesystem.close(handle)
+    end
 end
 
 local function fs_rootnize_cwd(path)
@@ -178,48 +206,69 @@ local function fs_concat(...)
     return normalized
 end
 
+
 local function fs_combinemount(path)
     return fs_concat(fs._mountpath, path)
 end
 
 local function fs_lookup_inode()
     local filesystem = components.filesystem
-    local function lookup(path)
+    local stack = { { path = "/", parent = nil } }
+    fs._lookup_table["/"] = "1"
+
+    while #stack > 0 do
+        local current = table.remove(stack)
+        local path, parent = current.path, current.parent
         local list = filesystem.list(fs_combinemount(path))
-        if not list then return end
-        for index, value in ipairs(list) do
-            path = fs_concat(path, value)
-            if not fs._inode[path] then
-                fs.createInode(path)
-            end
-            if filesystem.isDirectory(fs_combinemount(path)) then
-                lookup(path)
+        if not list then goto continue end
+
+        for _, value in ipairs(list) do
+            local fullpath = fs_concat(path, value)
+            if not fs._lookup_table[fullpath] then
+                local child_inode = fs.createInode(fullpath)
+                if parent then
+                    child_inode.parent = parent
+                    local inode = fs._inode[parent]
+                    inode.children = inode.children or {}
+                    table.insert(inode.children, child_inode.id)
+                end
+                if filesystem.isDirectory(fs_combinemount(fullpath)) then
+                    table.insert(stack, { path = fullpath, parent = fs._lookup_table[fullpath] })
+                end
             end
         end
+
+        ::continue::
     end
-    lookup("/")
+    fs_update_inode_file()
 end
 
 local function fs_init_inode()
-    if not components.filesystem.exists("root.json") then
-        local handle = components.filesystem.open("root.json", "w")
-        components.filesystem.write(handle, "{}")
-        components.filesystem.close(handle)
-    end
-    local handle = components.filesystem.open("root.json")
-    local content = ""
-    while true do
-        local chunk, err = components.filesystem.read(handle, 1024)
-        if not chunk then
-            if err then
-                error(err)
-            end
-            break
+    local function readall(path, jsoninit)
+        if not components.filesystem.exists(path) then
+            local handle = components.filesystem.open(path, "w")
+            components.filesystem.write(handle, "{" .. jsoninit .. "}")
+            components.filesystem.close(handle)
         end
-        content = content .. chunk
+        local handle = components.filesystem.open(path)
+        local content = ""
+        while true do
+            local chunk, err = components.filesystem.read(handle, 1024)
+            if not chunk then
+                if err then
+                    error(err)
+                end
+                break
+            end
+            content = content .. chunk
+        end
+        components.filesystem.close(handle)
+        return content
     end
-    components.filesystem.close(handle)
-    fs._inode = json.decode(content)
+    fs._inode = json.decode(readall("/inode.json", "\"index\": 0")) or {}
+    if fs.save_inode_lookup then
+        fs._lookup_table = json.decode(readall("/inode_lookup.json", "")) or {}
+    end
     fs_lookup_inode()
 end
 
@@ -233,23 +282,30 @@ function fs.closeAllHandles()
     end
 end
 
+---@return inode|nil,nil|string
 function fs.attributes(path)
-    path = fs_rootnize_cwd(path)
-    return fs._inode[path] or fs.createInode(path)
+    local ino_id = fs._lookup_table[path]
+    if ino_id then
+        return fs._inode[ino_id] or nil, "No such file or directory"
+    else
+        return nil, "No such file or directory"
+    end
 end
 
 function fs.createInode(path)
+    path = fs_rootnize_cwd(path)
     local root_path = fs_combinemount(path)
     local size = 0
-    local time = components.filesystem.lastModified(root_path)
+    local time = getRealTime()
     if components.filesystem.exists(root_path) then
         size = components.filesystem.size(root_path)
     end
+    local ino_id = tostring(fs._inode.index + 1)
     local u = nil
     if kernel.currentUser > -1 then
         u = user.getUserByUID(kernel.currentUser)
     end
-    ---@class inode
+    ---@type inode
     local inode = {
         mode = fs.isDirectory(path) and 755 or 644,
         uid = u and u.uid or 0,
@@ -258,40 +314,62 @@ function fs.createInode(path)
         mtime = time,
         ctime = time,
         btime = time,
-        id = #fs._inode + 1,
-        size = size
+        id = ino_id,
+        size = size,
+        directory = components.filesystem.isDirectory(root_path),
+        children = {},
+        parent = ""
     }
-    fs._inode[fs_rootnize_cwd(path)] = inode
-    fs_update_inode_file()
+    fs._inode[ino_id] = inode
+    fs._lookup_table[path] = ino_id
+    fs._reserved_lookup_table[ino_id] = path
+    fs._inode.index = fs._inode.index + 1
     return inode
 end
 
----@return integer
+---@return integer|nil, string|nil
 function fs.getPermission(path)
-    local inode = fs.attributes(path)
-    return inode.mode
+    path = fs_rootnize_cwd(path)
+    local inode, err = fs.attributes(path)
+    return inode and inode.mode or nil, err
 end
 
 ---@param perm integer 777(rwxrwxrwx), 755(rwxr-xr-x)
+---@return string|nil
 function fs.setPermission(path, perm)
-    local inode = fs.attributes(path)
-    inode.mode = perm
-    fs_update_inode_file()
+    path = fs_rootnize_cwd(path)
+    local inode, err = fs.attributes(path)
+    if inode then
+        inode.mode = perm
+        fs_update_inode_file()
+    else
+        return err
+    end
 end
 
 function fs.isDirectory(path)
-    return components.filesystem.isDirectory(fs_combinemount(path))
+    path = fs_rootnize_cwd(path)
+    local inode = fs.attributes(path)
+    if inode then
+        return inode.directory
+    else
+        return false
+    end
 end
 
 ---@param mode? fs_mode
 function fs.open(path, mode)
+    path = fs_rootnize_cwd(path)
     local root_path = fs_combinemount(path)
     mode = mode or "r"
-    if fs.isDirectory(path) then
-        return nil, "is a directory"
-    end
     if not fs.exists(path) and not mode:find("w") then
         return nil, "No such file"
+    elseif mode:find("w") then
+        fs.createInode(path)
+        fs_update_inode_file()
+    end
+    if fs.isDirectory(path) then
+        return nil, "is a directory"
     end
     local handle, reason = components.filesystem.open(root_path, mode)
     if not handle then
@@ -303,6 +381,7 @@ function fs.open(path, mode)
     end
 
     local inode = fs.attributes(path)
+
     local file = {
         handle = handle,
         mode = mode,
@@ -320,8 +399,9 @@ function fs.open(path, mode)
     end
 
     function file:read(n)
-        inode.atime = os.time()
-        fs._inode[path] = inode
+        local inode = fs.attributes(path)
+        inode.atime = getRealTime()
+
         return components.filesystem.read(handle, n)
     end
 
@@ -341,8 +421,8 @@ function fs.open(path, mode)
     end
 
     function file:write(value)
-        inode.mtime = os.time()
-        fs._inode[path] = inode
+        local inode = fs.attributes(path)
+        inode.mtime = getRealTime()
         return components.filesystem.write(handle, value)
     end
 
@@ -351,8 +431,9 @@ end
 
 --- @param mode fs_mode
 function fs.checkPermission(path, mode)
-    local proc = kernel.getCurrentProcess() or {suid = 0, euid = 0, uid = 0}
-    if proc.euid == 0 then 
+    path = fs_rootnize_cwd(path)
+    local proc = kernel.getCurrentProcess() or { suid = 0, euid = 0, uid = 0 }
+    if proc.euid == 0 then
         return true
     end
     --- @type inode
@@ -360,9 +441,9 @@ function fs.checkPermission(path, mode)
     --- @type user_passwd
     local usr = nonnil(user.getCurrent())
     if permission.canSetUID(inode.mode) and inode.uid == proc.euid then
-        return true 
+        return true
     elseif permission.canSetGID(inode.mode) and inode.gid == usr.gid then
-        return true 
+        return true
     end
     if inode.uid == proc.euid then
         if mode == "r" or mode == "rb" then
@@ -387,23 +468,14 @@ end
 
 ---@param action fs_action
 function fs.canAction(path, action)
-    local proc = kernel.getCurrentProcess() or {suid = 0, euid = 0, uid = 0}
-    --- @type user_passwd
-    local usr = nonnil(user.getCurrent())
-    if proc.euid == 0 then 
-        return true
-    end
-    if usr.uid == 0 then
+    path = fs_rootnize_cwd(path)
+    local proc = kernel.getCurrentProcess() or { suid = 0, euid = 0, uid = 0 }
+    if proc.euid == 0 then
         return true
     end
     --- @type inode
     local inode = fs.attributes(path)
-    if permission.canSetUID(inode.mode) or inode.uid == proc.euid then
-        return true 
-    elseif permission.canSetGID(inode.mode) or inode.gid == usr.gid then
-        return true 
-    end
-    if inode.uid == usr.uid then
+    if inode.uid == proc.uid then
         if action == "r" then
             return permission.canOwnerRead(inode.mode)
         elseif action == "x" then
@@ -411,7 +483,7 @@ function fs.canAction(path, action)
         else
             return permission.canOwnerWrite(inode.mode)
         end
-    elseif inode.gid == usr.gid then
+    elseif inode.gid == proc.gid then
         if action == "r" then
             return permission.canGroupRead(inode.mode)
         elseif action == "x" then
@@ -482,8 +554,14 @@ function fs.remove(path)
         if deny then
             return false, "Permission Denied"
         end
-        if components.filesystem.remove(fs_combinemount(path)) then
-            fs._inode[path] = nil
+        local inode = fs.attributes(path)
+        if inode and components.filesystem.remove(fs_combinemount(path)) then
+            for index, value in ipairs(inode.children) do
+                fs._inode[value] = nil
+                fs._lookup_table[fs._reserved_lookup_table[value]] = nil
+            end
+            fs._inode[fs._lookup_table[path]] = nil
+            fs._lookup_table[path] = nil
             fs_update_inode_file()
             return true, nil
         end
@@ -632,6 +710,27 @@ function fbcon.write(value)
 
     if fbcon_early_output then
         fbcon.update()
+    end
+end
+
+local function fbcon_create_blinker_thread()
+    if fbcon._blinkertid == 0 or not kernel.getThread(2, fbcon._blinkertid) then
+        fbcon._blinkertid = kernel.createThread(function()
+            while true do
+                if fbcon._blinkstate then
+                    timer.set(100, 5)
+                    if timer.check(100) then
+                        fbcon._blinkstate = false
+                    end
+                else
+                    timer.set(100, 5)
+                    if timer.check(100) then
+                        fbcon._blinkstate = true
+                    end
+                end
+                coroutine.yield()
+            end
+        end, "fbcon cursor blinker")
     end
 end
 
@@ -827,22 +926,7 @@ function fbcon.reset()
     if fbcon._blinkertid ~= 0 then
         kernel.killThread(2, fbcon._blinkertid)
     end
-    fbcon._blinkertid = kernel.createThread(function()
-        while true do
-            if fbcon._blinkstate then
-                timer.set(100, 5)
-                if timer.check(100) then
-                    fbcon._blinkstate = false
-                end
-            else
-                timer.set(100, 5)
-                if timer.check(100) then
-                    fbcon._blinkstate = true
-                end
-            end
-            coroutine.yield()
-        end
-    end, "fbcon cursor blinker")
+    fbcon_create_blinker_thread()
 end
 
 function fbcon.newline()
@@ -960,6 +1044,9 @@ end
 
 function panic(err, reason)
     printk("Kernel panic - " .. err .. ": " .. reason)
+    while true do
+        computer.pullSignal()
+    end
 end
 
 ------------------
@@ -1026,7 +1113,9 @@ end
 function module.unload(name)
     ---@type module_table
     local mod = module.loaded[name]
+    local info = mod.info
     if mod then
+        printk("module: unloading module " .. info.name .. (info.desc and (" - " .. info.desc) or ""))
         mod.unload()
         module.loaded[name] = nil
     end
@@ -1117,8 +1206,6 @@ end
 --- Event API ---
 -----------------
 
-event.eventHandlers = {}
-
 function event.pull(filter)
     return computer.pullSignal(filter)
 end
@@ -1127,9 +1214,9 @@ function event.push(name, ...)
     computer.pushSignal(name, ...)
 end
 
----@param func function
+---@param func fun(ev: table)
 function event.addEventHandler(func)
-    table.insert(event.eventHandlers, func)
+    return kernel.createEventThread(func, "event_handler", 3)
 end
 
 -----------------
@@ -1163,7 +1250,7 @@ end
 -------------------
 
 ---@class signal
-process.signals = {
+local signals = {
     SIGHUP    = 1,  -- Hangup detected on controlling terminal or death of controlling process
     SIGINT    = 2,  -- Interrupt from keyboard (Ctrl+C)
     SIGQUIT   = 3,  -- Quit from keyboard
@@ -1197,6 +1284,12 @@ process.signals = {
     SIGSYS    = 31, -- Bad system call (SVr4)
 }
 
+process.signals = signals
+
+function process.createKernelThread(func, name, nice)
+    return kernel.createThread(func, name, nice)
+end
+
 function process.kill(pid)
     return kernel.killProcess(pid)
 end
@@ -1227,7 +1320,7 @@ function process.seteuid(euid)
     end
     if permission.canSetUID(inode.mode) and inode.uid == 0 or inode.gid == 0 then
         return true
-    end 
+    end
     if euid == proc.uid or euid == proc.suid then
         proc.euid = euid
         return true
@@ -1290,10 +1383,12 @@ end
 group._groups = {}
 
 local function group_load_group()
-    local file = fs.open("/etc/group")
+    local file, err = fs.open("/etc/group")
+    if not file and err then
+        panic("group initialize error", err)
+    end
     local content = file:readAll()
     file:close()
-
     local groups = {}
     for line in content:gmatch("[^\r\n]+") do
         local groupname, groupid, member_str = line:match("^([^:]+):([^:]*):([^:]*)$")
@@ -1365,7 +1460,7 @@ end
 
 function group.create(groupname, gid, users)
     gid = gid or 1000
-    
+
     local group_line = table.concat({
         groupname,
         gid,
@@ -1488,7 +1583,9 @@ local function user_getShadow(username)
 end
 
 function user.checkRoot()
-    return kernel.currentUser == 0
+    ---@type user_passwd
+    local usr = user.getCurrent() or { uid = 0, gid = 0 }
+    return usr.uid == 0 or usr.gid == 0
 end
 
 function user.updateUsers()
@@ -1534,7 +1631,7 @@ function user.create(username, password, uid, gid, gecos, shell)
     gid = gid or uid
 
     if not group.getGroupByGID(uid) then
-        group.create(username, gid, {username})
+        group.create(username, gid, { username })
     end
 
     gecos = gecos or ""
@@ -1551,7 +1648,7 @@ function user.create(username, password, uid, gid, gecos, shell)
     }, ":")
 
     local hash = sha2.sha512(password)
-    local last_change = os.time()
+    local last_change = getRealTime()
     local min_days = 0
     local max_days = 99999
     local warn_days = 7
@@ -1753,7 +1850,7 @@ os.date = _os.date
 os.difftime = _os.difftime
 
 function os.time()
-    return _os.time() / 72
+    return getRealTime()
 end
 
 function os.getenv(name)
@@ -1807,9 +1904,11 @@ end
 function os.waitProcess(pid, timeout)
     timeout = timeout or math.huge
     while true do
-        timer.set(pid + 10000, timeout * 10)
-        if not kernel.getProcess(pid) or timer.check(pid + 10000) then
-            break
+        timer.set(pid + 10000, timeout)
+        if not kernel.getProcess(pid) then
+            return true
+        elseif timer.check(pid + 10000) then
+            return false
         end
         coroutine.yield()
     end
@@ -1849,27 +1948,29 @@ end
 ---------------------------------
 
 ---@class process_entry
----@field thread thread
----@field pid integer
----@field tid integer
----@field path string
----@field env table
----@field nice integer
----@field parent integer
----@field arguments table
----@field uid integer
----@field euid integer
----@field suid integer
----@field cwd string
----@field signals integer[]
----@field sig_handlers table<integer, function>
+---@field thread thread process coroutine thread
+---@field pid integer process id
+---@field tid integer thread id
+---@field pgid integer process group id
+---@field path string process executable path
+---@field env table process lua environment
+---@field nice integer nice value(process priority)
+---@field parent integer parent process pid
+---@field arguments table process arguments
+---@field uid integer user id
+---@field gid integer group id
+---@field euid integer effective user id
+---@field suid integer saved user id
+---@field cwd string current working directory
+---@field signals integer[] process signal buffer
+---@field sig_handlers table<integer, function> process signal handlers
 
 kernel._version = "1.0.1-dev-OC"
 ---@type table<process_entry>
 kernel.process = {}
 kernel.threads = {}
 kernel.currentProcess = 1
-kernel.currentUser = -1
+kernel.currentUser = 0
 kernel.activeTerminal = 0
 ---@type table<terminal>
 kernel.terminals = {}
@@ -1877,14 +1978,17 @@ kernel.log_buffer = {}
 
 local used_pids = {}
 
-local kernel_sig_handlers = {
-    [2] = function ()
-        kernel.killProcess(kernel.currentProcess)
-    end,
-    [15] = function ()
-        kernel.killProcess(kernel.currentProcess)
-    end
-}
+local function kernel_get_default_signal_handlers(pid)
+    local kernel_sig_handlers = {
+        [2] = function()
+            kernel.killProcess(pid)
+        end,
+        [15] = function()
+            kernel.killProcess(pid)
+        end
+    }
+    return kernel_sig_handlers
+end
 
 local function kernel_get_pid()
     local pid = 1
@@ -1969,15 +2073,15 @@ function kernel.getEnv()
                     len[i] = math.max(len[i] or 0, #str)
                 end
             end
-
+            local result = ""
             for _, row in ipairs(printTable) do
                 for i, col in ipairs(row) do
                     local str = tostring(col)
-                    kernel.std.write(str)
-                    kernel.std.write((" "):rep(len[i] - #str + 1))
+                    result = result .. str .. (" "):rep(len[i] - #str + 1)
                 end
-                kernel.std.write("\n")
+                result = result .. "\n"
             end
+            kernel.std.write(result)
         end
     }
 
@@ -2012,6 +2116,8 @@ end
 ---@param env table|nil
 ---@param pid integer|nil
 function kernel.exec(path, args, nice, env, pid)
+    ---@type inode
+    local attr = fs.attributes(path)
     if not fs.exists(path) then
         return -1, "No such file"
     end
@@ -2025,12 +2131,19 @@ function kernel.exec(path, args, nice, env, pid)
     if kernel.getCurrentProcess() then
         cwd = kernel.getCurrentProcess().cwd
     end
-    local parent = kernel.getCurrentProcess() or { uid = 0, euid = 0, suid = 0 }
+    local parent = kernel.getCurrentProcess() or { uid = 0, gid = 0, euid = 0, suid = 0 }
+    local euid = parent.euid
+    local suid = parent.suid
+    if permission.canSetUID(attr.mode) then
+        euid = attr.uid
+        euid = attr.uid
+    end
     ---@type process_entry
     local entry = {
         thread = coroutine.create(func),
         pid = pid,
         tid = pid,
+        pgid = parent.pgid or 1,
         path = path,
         env = env or kernel.getEnv(),
         nice = nice or 3,
@@ -2038,10 +2151,11 @@ function kernel.exec(path, args, nice, env, pid)
         arguments = args or {},
         cwd = cwd,
         uid = parent.uid,
-        euid = parent.euid,
-        suid = parent.suid,
+        gid = parent.gid,
+        euid = euid,
+        suid = suid,
         signals = {},
-        sig_handlers = kernel_sig_handlers
+        sig_handlers = kernel_get_default_signal_handlers(pid)
     }
 
     table.insert(kernel.process, entry)
@@ -2066,12 +2180,13 @@ function kernel.execf(func, name, args, nice, env, pid)
     if kernel.getCurrentProcess() then
         cwd = kernel.getCurrentProcess().cwd
     end
-    local parent = kernel.getCurrentProcess() or { uid = 0, euid = 0, suid = 0 }
+    local parent = kernel.getCurrentProcess() or { uid = 0, gid = 0, euid = 0, suid = 0 }
     ---@type process_entry
     local entry = {
         thread = coroutine.create(func),
         pid = pid,
         tid = pid,
+        pgid = parent.pgid or 1,
         path = "[" .. name .. "]",
         env = env or kernel.getEnv(),
         nice = nice or 3,
@@ -2079,10 +2194,11 @@ function kernel.execf(func, name, args, nice, env, pid)
         arguments = args or {},
         cwd = cwd,
         uid = parent.uid,
+        gid = parent.gid,
         euid = parent.euid,
         suid = parent.suid,
         signals = {},
-        sig_handlers = kernel_sig_handlers
+        sig_handlers = kernel_get_default_signal_handlers(pid)
     }
 
     table.insert(kernel.process, entry)
@@ -2108,15 +2224,11 @@ function kernel.getProcess(pid)
     end
 end
 
-local function kernel_thread_processor()
-    while true do
-        for index, value in ipairs(kernel.threads) do
-            local s, e = coroutine.resume(value.thread)
-            if not s then
-                printk("Kernel thread " .. value.tid .. " Exited on error: " .. e)
-            end
+function kernel.getThread(pid, tid)
+    for index, value in ipairs(kernel.threads) do
+        if value.pid == pid and value.tid == tid then
+            return value
         end
-        coroutine.yield()
     end
 end
 
@@ -2124,20 +2236,23 @@ function kernel.killThread(pid, tid)
     for index, value in ipairs(kernel.threads) do
         if value.pid == pid and value.tid == tid then
             table.remove(kernel.threads, index)
+            return true
         end
     end
+    return false
 end
 
----@param func function
-function kernel.createThread(func, name, nice)
+---@param func fun(ev: table)
+function kernel.createEventThread(func, name, nice)
     local pid = kernel_get_pid()
     if not func then return end
-    local parent = kernel.getCurrentProcess() or { uid = 0, euid = 0, suid = 0 }
+    local parent = kernel.getCurrentProcess() or { uid = 0, gid = 0, euid = 0, suid = 0 }
     ---@type process_entry
     local entry = {
         thread = coroutine.create(func),
         pid = 2,
         tid = pid,
+        pgid = 2,
         path = "[" .. name .. "]",
         env = kernel.getEnv(),
         nice = nice or 3,
@@ -2145,10 +2260,44 @@ function kernel.createThread(func, name, nice)
         arguments = {},
         cwd = "/",
         uid = parent.uid,
+        gid = parent.gid,
         euid = parent.euid,
         suid = parent.suid,
         signals = {},
-        sig_handlers = kernel_sig_handlers
+        sig_handlers = kernel_get_default_signal_handlers(pid),
+        event_thread_func = func
+    }
+
+    table.insert(kernel.threads, entry)
+
+    return pid
+end
+
+---@param func fun(ev: table)
+function kernel.createThread(func, name, nice)
+    if not user.checkRoot() then
+        error("Operation not permitted")
+    end
+    local pid = kernel_get_pid()
+    if not func then return end
+    ---@type process_entry
+    local entry = {
+        thread = coroutine.create(func),
+        pid = 2,
+        tid = pid,
+        pgid = 2,
+        path = "[" .. name .. "]",
+        env = kernel.getEnv(),
+        nice = nice or 3,
+        parent = 2,
+        arguments = {},
+        cwd = "/",
+        uid = 0,
+        gid = 0,
+        euid = 0,
+        suid = 0,
+        signals = {},
+        sig_handlers = kernel_get_default_signal_handlers(pid)
     }
 
     table.insert(kernel.threads, entry)
@@ -2167,17 +2316,51 @@ end
 function kernel.main()
     printk("starting init process...")
     kernel.currentUser = 0
-    kernel.execf(kernel_thread_processor, "kthreadd", {}, -20, _ENV, 2)
+    event.addEventHandler(function(ev)
+        if ev[1] == "shutdown" then
+            fbcon_early_output = true
+            fbcon.gpu = components.gpu
+            printk("Shutting down...")
+
+            local process_list = {}
+            for _, proc in ipairs(kernel.process) do
+                table.insert(process_list, proc)
+            end
+            
+            table.sort(process_list, function(a, b)
+                return a.pid > b.pid
+            end)
+
+            for _, proc in ipairs(process_list) do
+                printk("Sending SIGTERM to process " .. proc.pid .. " (" .. proc.path .. ")")
+                kernel.signal(proc.pid, signals.SIGTERM)
+                local timeouted = os.waitProcess(proc.pid, 50)
+                if timeouted then
+                    printk("Timeout process " .. proc.pid)
+                    kernel.killProcess(proc.pid)
+                else
+                    printk("Successfully terminated process " .. proc.pid)
+                end
+            end
+
+            module.unloadAll()
+            fs.closeAllHandles()
+            computer.shutdown(ev[2])
+        end
+    end)
     kernel.exec("/sbin/init.lua", { "PrimeOS (OpenComputers)" }, 0, _ENV, 1)
     ---@param proc process_entry
-    local function process_signals(proc)
+    local function process_signals(proc, proc_idx)
         local handlers = {}
         for sig, handler in pairs(proc.sig_handlers) do
             handlers[tostring(sig)] = handler
         end
         for index, value in ipairs(proc.signals) do
+            if value == 19 or value == 9 then
+                table.remove(kernel.process, proc_idx)
+            end
             local handle = handlers[tostring(value)]
-            if handle then
+            if type(handle) == "function" then
                 handle()
             end
         end
@@ -2187,20 +2370,23 @@ function kernel.main()
         table.sort(kernel.process, function(a, b)
             return a.nice < b.nice
         end)
-        if ev[1] == "shutdown" then
-            module.unloadAll()
-            fs.closeAllHandles()
-            table.sort(kernel.process, function(a, b)
-                return a.pid > b.pid
-            end)
-            for index, value in ipairs(kernel.process) do
-                kernel.signal(value.pid, 15)
-                os.waitProcess(value.pid, 5)
-                printk("Timeout process " .. value.pid)
-                kernel.killProcess(value.pid)
+        local dead_threads = {}
+        for index, value in ipairs(kernel.threads) do
+            local s, e
+            if type(value.event_thread_func) == "function" then
+                if coroutine.status(value.thread) == "dead" then
+                    value.thread = coroutine.create(value.event_thread_func)
+                end
+                s, e = coroutine.resume(value.thread, ev)
+            else
+                if coroutine.status(value.thread) == "dead" then
+                    table.insert(dead_threads, index)
+                end
+                s, e = coroutine.resume(value.thread, ev)
             end
-            kernel.process = {}
-            computer.shutdown(ev[2])
+            if not s then
+                printk("Kernel thread " .. value.tid .. " Exited on error: " .. e)
+            end
         end
         ---@type integer, process_entry
         for index, value in ipairs(kernel.process) do
@@ -2208,18 +2394,20 @@ function kernel.main()
             if coroutine.status(value.thread) == "dead" then
                 table.remove(kernel.process, index)
             else
-                process_signals(value)
-                local s, e = coroutine.resume(value.thread, table.unpack(value.arguments))
-                process_signals(value)
+                process_signals(value, index)
+                local s, e
+                if value.pid == 2 then
+                    s, e = coroutine.resume(value.thread, ev)
+                else
+                    s, e = coroutine.resume(value.thread, table.unpack(value.arguments))
+                end
                 if not s then
                     printk("Process " .. value.pid .. " Exited on error: " .. e)
                 end
             end
         end
-        if ev[1] then
-            for index, value in ipairs(event.eventHandlers) do
-                value(ev)
-            end
+        for index, value in ipairs(dead_threads) do
+            table.remove(kernel.threads, value)
         end
         fbcon.update()
     end
@@ -2229,9 +2417,9 @@ end
 --- System Initialization ---
 -----------------------------
 
-loadfile = function(file)
+function loadlibrary(path)
     local addr, invoke = computer.getBootAddress(), component.invoke
-    local handle, reason = invoke(addr, "open", file)
+    local handle, reason = invoke(addr, "open", path)
     assert(handle, reason)
     local buffer = ""
     repeat
@@ -2240,15 +2428,18 @@ loadfile = function(file)
         buffer = buffer .. (data or "")
     until not data
     invoke(addr, "close", handle)
-    return load(buffer, "=" .. file, "bt", kernel.getEnv())
+    return load(buffer, "=" .. path, "bt", kernel.getEnv())()
 end
 
-json = loadfile("/system/lib/dkjson.lua")()
-argparse = loadfile("/system/lib/argparse.lua")()
-sha2 = loadfile("/system/lib/sha2for51.lua")()
+json = loadlibrary("/system/lib/dkjson.lua")
+argparse = loadlibrary("/system/lib/argparse.lua")
+sha2 = loadlibrary("/system/lib/sha2for51.lua")
 
 loadfile = function(path)
     local file, err = fs.open(path)
+    if not file and err then
+        return nil, err
+    end
     local content = file:readAll()
     file:close()
 
@@ -2269,6 +2460,12 @@ fs.remove("/etc/shadow")
 ]]
 
 local function boot()
+    local proxy, path = component.proxy(computer.tmpAddress()), "timestamp"
+
+    proxy.close(proxy.open(path, "wb"))
+    bootRealTime = math.floor(proxy.lastModified(path) / 1000)
+    proxy.remove(path)
+
     -- initializing devices and system component
     fbcon.reset()
     fs_init_inode()

@@ -17,7 +17,11 @@ function devfs.register(name, dev, folder, value)
     if not fs.exists(folder) then
         fs.makeDirectory(folder)
     end
-    local file = fs.open(path, "w")
+    local file, err = fs.open(path, "w")
+    if not file and err then
+        printk("devfs: " .. err)
+        return
+    end
     file:write(value)
     file:close()
     devices[path] = dev
@@ -34,6 +38,7 @@ end
 local function load()
     fs.remove("/dev")
     fs.makeDirectory("/dev")
+    fs.setPermission("/dev", 755)
 end
 
 local function unload()

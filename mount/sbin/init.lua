@@ -4,6 +4,10 @@ local os_name = args[1]
 ---@type os_env
 _ENV = _ENV
 
+process.setSignalHandler(process.signals.SIGINT, function ()
+    -- nop
+end)
+
 if process.getCurrentPID() ~= 1 then
     std.print("init already running")
     return

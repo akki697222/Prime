@@ -40,8 +40,9 @@ function tty.create(id)
 
         if type == "key_down" then
             --printk("strchar: " .. string.char(char_code) .. " char: " .. char_code .. " key: " .. key_code)
-            if key_code == special_keycodes.CTRL_T then
+            if char_code == 3 and key_code == special_keycodes.CTRL_T then
                 --printk("SIGINT to " .. process.getCurrentPID())
+                self.terminal:write("^C")
                 process.signalCurrent(process.signals.SIGINT)
             end
 
@@ -52,7 +53,7 @@ function tty.create(id)
                     if char_code == 13 then
                         self.reading = false
                     elseif char_code == 8 then
-                        if self.buffer ~= "" then
+                        if self.buffer ~= "" and not self.disableWriteCharInput then
                             self.buffer = self.buffer:sub(1, -2)
                             self.terminal:backspace()
                         end
@@ -71,7 +72,10 @@ function tty.create(id)
                 self.pressing[key_code] = false
             end
         elseif type == "clipboard" then
-            self.buffer = self.buffer .. char_code
+            if self.reading and not self.disableWriteCharInput and not self.flags.canonical then
+                self.terminal:write(char_code)
+                self.buffer = self.buffer .. char_code
+            end
         end
     end
 
