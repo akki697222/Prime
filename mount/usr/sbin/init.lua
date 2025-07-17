@@ -1,10 +1,10 @@
-local args = {...}
+local args = { ... }
 local os_name = args[1]
 
 ---@type os_env
 _ENV = _ENV
 
-process.setSignalHandler(process.signals.SIGINT, function ()
+process.setSignalHandler(process.signals.SIGINT, function()
     -- nop
 end)
 
@@ -19,7 +19,10 @@ init._VERSION = "0.1.0"
 local colors = fbcon.ansicolors
 
 std.print()
-std.print("   " .. colors.green .. "OpenOC " .. colors.cyan .. init._VERSION .. colors.reset .. " is starting up " .. colors.bright_blue .. os_name .. colors.reset)
+std.print("   " ..
+colors.green ..
+"OpenOC " ..
+colors.cyan .. init._VERSION .. colors.reset .. " is starting up " .. colors.bright_blue .. os_name .. colors.reset)
 std.print()
 
 ---@class openoc_service
@@ -66,15 +69,18 @@ end
 
 function init.initd()
     local services = {}
-    for index, value in ipairs(fs.list("/etc/init.d")) do
-        if value:sub(-8) == ".service" then
-            local file, err = fs.open(fs.combine("/etc/init.d", value))
-            services[#services + 1] = os.decodeTable(file:readAll())
-            file:close()
+    local list = fs.list("/etc/init.d")
+    if list then
+        for index, value in ipairs(list) do
+            if value:sub(-8) == ".service" then
+                local file, err = fs.open(fs.combine("/etc/init.d", value))
+                services[#services + 1] = os.decodeTable(file:readAll())
+                file:close()
+            end
         end
-    end
-    for index, value in ipairs(services) do
-        init.start(value)
+        for index, value in ipairs(services) do
+            init.start(value)
+        end
     end
 end
 
@@ -98,7 +104,7 @@ function init.loginSetup()
             std.print("Password cannot be empty. Please try again.")
         elseif pass1 ~= pass2 then
             std.print("Passwords do not match. Please try again.")
-            elseif pass1 == pass2 then
+        elseif pass1 == pass2 then
             pass = pass1
             break
         end
@@ -119,19 +125,13 @@ function init.makeBinExecutable()
     end
 end
 
-function init.setupDirectory() 
+function init.setupDirectory()
     local dirs = {
         ["/root"] = 700,
         ["/tmp"] = 777,
-        ["/usr/bin"] = "/bin",
-        ["/usr/sbin"] = "/sbin"
     }
     for key, value in pairs(dirs) do
-        if type(value) == "number" then
-            fs.setPermission(key, value)
-        else
-            local inode = fs.createLink(key, value)
-        end
+        fs.setPermission(key, value)
     end
 end
 
@@ -155,6 +155,7 @@ init.start({
     path = "/usr/sbin/login.lua",
     arguments = {}
 })
+
 while true do
     coroutine.yield()
 end

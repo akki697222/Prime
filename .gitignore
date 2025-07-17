@@ -8,4 +8,4 @@ mount/etc/init.d/firstboot
 build_installer.lua
 packer.lua
 onix.pak
-system/data
+system/data/*

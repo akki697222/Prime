@@ -16,7 +16,7 @@ while true do
     if usr then
         local shell_pid, err = process.exec(usr.shell, {usr.home}, 0)
         if shell_pid == -1 then
-            printk("login: " .. usr.shell .. ": " .. err)
+            std.print("login: " .. usr.shell .. ": " .. err)
         else
             os.waitProcess(shell_pid)
         end

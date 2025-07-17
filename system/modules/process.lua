@@ -52,8 +52,8 @@ function process.kill(pid)
 end
 
 function process.cwd(path)
-    path = fs.normalizePath(path)
     if path then
+        path = fs.resolvePath(path)
         if fs.canAction(path, "r") then
             kernel.getCurrentProcess().cwd = path
             return kernel.getCurrentProcess().cwd

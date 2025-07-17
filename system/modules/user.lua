@@ -231,7 +231,6 @@ function user.switchuser(username, password)
 end
 
 function user.init()
-    user.updateUsers()
     local root_passwd_line = "root:x:0:0:root:/root:/bin/posh.lua\n"
     local root_shadow_line = "root:*:0:0:99999:7:::\n"
     if not fs.exists("/etc/passwd") then
@@ -246,6 +245,7 @@ function user.init()
     end
     fs.setPermission("/etc/shadow", 400)
     fs.setPermission("/etc/passwd", 644)
+    user.updateUsers()
 end
 
 return user, "user"

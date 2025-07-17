@@ -122,8 +122,9 @@ end
 
 local function fs_lookup_inode()
     local filesystem = filesystem
-    local stack = { { path = "/", parent = nil } }
-
+    local stack = { { path = "/", parent = "1" } }
+    fs.createInode("/")
+    fs._lookup_table["/"] = "1"
     while #stack > 0 do
         local current = table.remove(stack)
         local path, parent = current.path, current.parent
@@ -148,7 +149,6 @@ local function fs_lookup_inode()
         end
         ::continue::
     end
-    fs._lookup_table["/"] = "1"
     fs_update_inode_file()
     fs._initialized = true
 end
@@ -682,8 +682,23 @@ function fs.remove(path)
 end
 
 function fs.list(path)
+    path = fs.resolvePath(path)
+    if not path then
+        return nil, "No such file or directory"
+    end
     if fs.canAction(path, "r") then
-        return filesystem.list(fs_combinemount(path)) or "No such file or directory"
+        local inode = fs.attributes(path)
+        if not inode then
+            return nil, "No such file or directory"
+        end
+        if inode.type == "file" then
+            return nil, "Not a directory"
+        end
+        local list = {}
+        for index, value in ipairs(inode.children) do
+            table.insert(list, fs._reserved_lookup_table[value])
+        end
+        return list
     else
         return nil, "Permission Denied"
     end
