@@ -1,0 +1,187 @@
+---@meta
+
+---@class oc_env
+---@field _G oc_env
+---@field _VERSION string
+---@field assert fun(v:any, message?:any):any
+---@field error fun(message:any, level?:integer)
+---@field getmetatable fun(object:any):table
+---@field ipairs fun(t:table):(fun(t:table, i:any):any, table, any)
+---@field load fun(chunk:string|function, chunkname?:string, mode?:string, env?:table):function, string
+---@field next fun(table:table, index?:any):any
+---@field pairs fun(t:table):(fun(t:table, k:any):any, table, any)
+---@field pcall fun(f:function, ...):boolean, ...
+---@field rawequal fun(v1:any, v2:any):boolean
+---@field rawget fun(table:table, index:any):any
+---@field rawlen fun(v:table|string):integer
+---@field rawset fun(table:table, index:any, value:any)
+---@field select fun(index:any, ...):any
+---@field setmetatable fun(table:table, metatable:table):table
+---@field tonumber fun(e:any, base?:integer):number
+---@field tostring fun(v:any):string
+---@field type fun(v:any):string
+---@field xpcall fun(f:function, err:fun()):boolean, ...
+---@field bit32 oc_bit32_lib
+---@field coroutine oc_coroutine_lib
+---@field debug oc_debug_lib
+---@field math oc_math_lib
+---@field os oc_os_lib
+---@field string oc_string_lib
+---@field table oc_table_lib
+---@field component oc_component_lib
+---@field computer oc_computer_lib
+---@field unicode oc_unicode_lib
+---@field utf8 oc_utf8_lib
+---@field checkArg fun(n:integer, val:any, ...:string):nil
+
+---@class oc_bit32_lib
+---@field arshift fun(x:integer, disp:integer):integer
+---@field band fun(...:integer):integer
+---@field bnot fun(x:integer):integer
+---@field bor fun(...:integer):integer
+---@field btest fun(...:integer):boolean
+---@field bxor fun(...:integer):integer
+---@field extract fun(n:integer, field:integer, width?:integer):integer
+---@field lrotate fun(x:integer, disp:integer):integer
+---@field lshift fun(x:integer, disp:integer):integer
+---@field replace fun(n:integer, v:integer, field:integer, width?:integer):integer
+---@field rrotate fun(x:integer, disp:integer):integer
+---@field rshift fun(x:integer, disp:integer):integer
+
+---@class oc_coroutine_lib
+---@field create fun(f:function):thread
+---@field resume fun(co:thread, ...):boolean, ...
+---@field running fun():thread, boolean
+---@field status fun(co:thread):string
+---@field wrap fun(f:function):function
+---@field yield fun(...):...
+
+---@class oc_debug_lib
+---@field getinfo fun(thread_or_func:thread|function, what?:string):table
+---@field traceback fun(thread?:thread, message?:string, level?:integer):string
+---@field getlocal fun(f:thread|number, local_index:integer):string, any
+---@field getupvalue fun(f:function, up_index:integer):string, any
+
+---@class oc_math_lib
+---@field abs fun(x:number):number
+---@field acos fun(x:number):number
+---@field asin fun(x:number):number
+---@field atan fun(x:number):number
+---@field atan2 fun(y:number, x:number):number
+---@field ceil fun(x:number):number
+---@field cos fun(x:number):number
+---@field cosh fun(x:number):number
+---@field deg fun(x:number):number
+---@field exp fun(x:number):number
+---@field floor fun(x:number):number
+---@field fmod fun(x:number, y:number):number
+---@field frexp fun(x:number):number, number
+---@field huge number
+---@field ldexp fun(m:number, e:number):number
+---@field log fun(x:number, base?:number):number
+---@field max fun(...:number):number
+---@field min fun(...:number):number
+---@field modf fun(x:number):number, number
+---@field pi number
+---@field pow fun(x:number, y:number):number
+---@field rad fun(x:number):number
+---@field random fun(m?:integer, n?:integer):integer
+---@field randomseed fun(x:integer):nil
+---@field sin fun(x:number):number
+---@field sinh fun(x:number):number
+---@field sqrt fun(x:number):number
+---@field tan fun(x:number):number
+---@field tanh fun(x:number):number
+---@field maxinteger integer
+---@field mininteger integer
+---@field tointeger fun(x:any):integer?
+---@field type fun(x:any):string
+---@field ult fun(m:integer, n:integer):boolean
+
+---@class oc_os_lib
+---@field clock fun():number
+---@field date fun(format?:string, time?:number):any
+---@field difftime fun(t1:number, t2:number):number
+---@field time fun(table?:table):number
+
+---@class oc_string_lib
+---@field byte fun(s:string, i?:integer, j?:integer):...
+---@field char fun(...:integer):string
+---@field dump fun(f:function):string
+---@field find fun(s:string, pattern:string, init?:integer, plain?:boolean):...
+---@field format fun(formatstring:string, ...):string
+---@field gmatch fun(s:string, pattern:string):function
+---@field gsub fun(s:string, pattern:string, repl:string|function|table, n?:integer):string, integer
+---@field len fun(s:string):integer
+---@field lower fun(s:string):string
+---@field match fun(s:string, pattern:string, init?:integer):...
+---@field rep fun(s:string, n:integer, sep?:string):string
+---@field reverse fun(s:string):string
+---@field sub fun(s:string, i:integer, j?:integer):string
+---@field upper fun(s:string):string
+---@field pack fun(fmt:string, ...):string
+---@field packsize fun(fmt:string):integer
+---@field unpack fun(fmt:string, s:string, pos?:integer):...
+
+---@class oc_table_lib
+---@field concat fun(list:table, sep?:string, i?:integer, j?:integer):string
+---@field insert fun(list:table, pos_or_value:any, value?:any)
+---@field pack fun(...):table
+---@field remove fun(list:table, pos?:integer):any
+---@field sort fun(list:table, comp?:fun(a:any, b:any):boolean)
+---@field unpack fun(list:table, i?:integer, j?:integer):...
+---@field move fun(a1:table, f:integer, e:integer, t:integer, a2?:table):table
+
+---@class oc_component_lib
+---@field doc fun(address:string):string
+---@field fields fun(address:string, method:string):table
+---@field invoke fun(address:string, method:string, ...):any
+---@field list fun(filter?:string, exact?:boolean):table
+---@field methods fun(address:string):table
+---@field proxy fun(address:string):any
+---@field slot fun(address:string):integer
+---@field type fun(address:string):string
+
+---@class oc_computer_lib
+---@field address fun():string
+---@field addUser fun(name:string):boolean
+---@field beep fun(freq:number, duration:number):boolean
+---@field energy fun():number
+---@field freeMemory fun():number
+---@field getArchitectures fun():string[]
+---@field getArchitecture fun():string
+---@field getBootAddress fun():string
+---@field getDeviceInfo fun():table
+---@field getProgramLocations fun():table
+---@field isRobot fun():boolean
+---@field maxEnergy fun():number
+---@field pullSignal fun(timeout?:number):string, ...
+---@field pushSignal fun(name:string, ...):boolean
+---@field removeUser fun(name:string):boolean
+---@field setArchitecture fun(name:string):boolean
+---@field setBootAddress fun(address:string):boolean
+---@field shutdown fun(reboot?:boolean):nil
+---@field tmpAddress fun():string
+---@field totalMemory fun():number
+---@field uptime fun():number
+---@field users fun():string[]
+
+---@class oc_unicode_lib
+---@field char fun(...:integer):string
+---@field charWidth fun(s:string):integer
+---@field isWide fun(char:string):boolean
+---@field len fun(s:string):integer
+---@field lower fun(s:string):string
+---@field reverse fun(s:string):string
+---@field sub fun(s:string, i:integer, j?:integer):string
+---@field upper fun(s:string):string
+---@field wlen fun(s:string):integer
+---@field wtrunc fun(s:string, limit:integer):string
+
+---@class oc_utf8_lib
+---@field char fun(...:integer):string
+---@field charpattern string
+---@field codes fun(s:string):(fun(s:string, i:integer):integer, string, integer)
+---@field codepoint fun(s:string, i?:integer, j?:integer):...
+---@field len fun(s:string, i?:integer, j?:integer):integer, integer
+---@field offset fun(s:string, n:integer, i?:integer):integer

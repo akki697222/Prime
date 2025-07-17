@@ -14,8 +14,12 @@ while true do
     std.print()
     local usr = user.switchuser(username, password)
     if usr then
-        local shell_pid = process.exec(usr.shell, {usr.home}, 0)
-        os.waitProcess(shell_pid)
+        local shell_pid, err = process.exec(usr.shell, {usr.home}, 0)
+        if shell_pid == -1 then
+            printk("login: " .. usr.shell .. ": " .. err)
+        else
+            os.waitProcess(shell_pid)
+        end
     else
         std.print("Login failed.\n")
     end

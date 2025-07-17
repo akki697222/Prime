@@ -42,7 +42,10 @@ while true do
             if not fs.isDirectory(path) then
                 sh_err(command, path .. ": not a directory")
             else
-                process.cwd(path)
+                local newDir, err process.cwd(path)
+                if not newDir and err then
+                    sh_err(command, path .. ": " .. err)
+                end
             end
         end
     elseif command ~= "" then

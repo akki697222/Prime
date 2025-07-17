@@ -6,9 +6,9 @@ parser:argument("directory", "", process.cwd())
 parser:flag("-a --all", "do not ignore entries starting with .")
 parser:flag("-l", "use a long listing format")
 local args = parser:parse({ ... })
-local list = fs.list(args.directory)
+local list, err = fs.list(args.directory)
 if not list then
-    std.print("ls: cannot access '" .. args.directory .. "': No such file or directory")
+    std.print("ls: cannot access '" .. args.directory .. "': " .. err)
     return
 end
 
@@ -44,6 +44,7 @@ end
 
 if args.l then
     local tbl = {}
+    local items = 0
     for _, name in ipairs(list) do
         if not args.all and name:sub(1, 1) == "." then
             goto continue
@@ -86,8 +87,11 @@ if args.l then
         
         table.insert(tbl, {ftype .. perms, owner, group, size, mtime, name})
 
+        items = items + 1
+
         ::continue::
     end
+    table.insert(tbl, 1, { "total " .. items })
     styledPrint(tbl)
 else
     local result = ""

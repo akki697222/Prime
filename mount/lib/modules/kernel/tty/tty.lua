@@ -84,6 +84,10 @@ function tty.create(id)
         self.terminal = terminal
     end
 
+    function obj:isOpen()
+        return self.terminal ~= nil
+    end
+
     function obj:write(data)
         self.buffer = self.buffer .. tostring(data)
     end

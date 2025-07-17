@@ -69,7 +69,7 @@ function init.initd()
     for index, value in ipairs(fs.list("/etc/init.d")) do
         if value:sub(-8) == ".service" then
             local file, err = fs.open(fs.combine("/etc/init.d", value))
-            services[#services + 1] = json.decode(file:readAll())
+            services[#services + 1] = os.decodeTable(file:readAll())
             file:close()
         end
     end
@@ -110,19 +110,40 @@ function init.loginSetup()
 end
 
 function init.makeBinExecutable()
-    for index, value in ipairs(fs.list("/bin")) do
+    for index, value in ipairs(fs.list("/usr/bin")) do
         if value == "sudo.lua" or value == "sudo" then
-            fs.setPermission(fs.combine("/bin", value), 4755)
+            fs.setPermission(fs.combine("/usr/bin", value), 4755)
         else
-            fs.setPermission(fs.combine("/bin", value), 755)
+            fs.setPermission(fs.combine("/usr/bin", value), 755)
         end
     end
 end
 
+function init.setupDirectory() 
+    local dirs = {
+        ["/root"] = 700,
+        ["/tmp"] = 777,
+        ["/usr/bin"] = "/bin",
+        ["/usr/sbin"] = "/sbin"
+    }
+    for key, value in pairs(dirs) do
+        if type(value) == "number" then
+            fs.setPermission(key, value)
+        else
+            local inode = fs.createLink(key, value)
+        end
+    end
+end
+
+if not fs.exists("/etc/init.d") then
+    fs.makeDirectory("/etc/init.d")
+end
+
 init.initd()
+init.setupDirectory()
 if not fs.exists("/etc/init.d/firstboot") then
     fs.open("/etc/init.d/firstboot", "w"):close()
-    init.log(2, "First Boot Detected\n")
+    std.print("Starting setup...")
     init.loginSetup()
 end
 
@@ -131,7 +152,7 @@ init.makeBinExecutable()
 init.start({
     name = "login",
     desc = "login prompt",
-    path = "/sbin/login.lua",
+    path = "/usr/sbin/login.lua",
     arguments = {}
 })
 while true do

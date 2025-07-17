@@ -10,12 +10,14 @@ local module_info = {
 ---@class devfs
 local devfs = {}
 local devices = {}
+local devfs_folders = {}
 
 function devfs.register(name, dev, folder, value)
     folder = fs.combine("/dev", folder)
     local path = fs.combine(folder, name)
-    if not fs.exists(folder) then
+    if not devfs_folders[folder] then
         fs.makeDirectory(folder)
+        devfs_folders[folder] = true
     end
     local file, err = fs.open(path, "w")
     if not file and err then

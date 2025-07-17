@@ -1,1 +1,0 @@
-std.print(json.encode(os.date('*t')))

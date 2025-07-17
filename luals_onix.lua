@@ -1,0 +1,13 @@
+---@class onix_kernel_mode_env: oc_env
+---@field device device
+---@field event event
+---@field fbcon fbcon
+---@field fs fs
+---@field group group
+---@field kernel kernel
+---@field module module
+---@field os os
+---@field permission permission
+---@field process process
+---@field timer timer
+---@field user user

@@ -1,0 +1,1 @@
+std.print(os.date("%Y-%m-%d %H:%M:%S", os.time()))

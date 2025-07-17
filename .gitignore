@@ -5,3 +5,7 @@ mount/etc/passwd
 mount/etc/group
 mount/etc/shadow
 mount/etc/init.d/firstboot
+build_installer.lua
+packer.lua
+onix.pak
+system/data

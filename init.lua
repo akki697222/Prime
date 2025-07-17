@@ -1,18 +1,45 @@
-loadfile = function(file)
+---@type oc_env
+_ENV = _ENV
+
+---@param env? table
+loadfile = function(file, env)
     local addr, invoke = computer.getBootAddress(), component.invoke
     local handle, reason = invoke(addr, "open", file)
-    assert(handle, reason)
+    if not handle then
+        return nil, reason
+    end
+
     local buffer = ""
-    repeat
+    while true do
         local data, reason = invoke(addr, "read", handle, math.huge)
-        assert(data or not reason, reason)
-        buffer = buffer .. (data or "")
-    until not data
+        if not data then
+            if reason then
+                invoke(addr, "close", handle)
+                return nil, reason
+            else
+                break
+            end
+        end
+        buffer = buffer .. data
+    end
     invoke(addr, "close", handle)
-    return load(buffer, "=" .. file, "bt", _G)
+
+    local chunk, err = load(buffer, "=" .. file, "bt", env or _G)
+    if not chunk then
+        return nil, err
+    end
+    return chunk
 end
 
-local s, e = xpcall(loadfile("system/kernel.lua"), debug.traceback)
+function dofile(file, env)
+    local f, e = loadfile(file, env)
+    if not f then
+        error(e)
+    end
+    return f()
+end
+
+local s, e = xpcall(loadfile("system/main.lua"), debug.traceback)
 if not s then
     local gpu = component.proxy(component.list("gpu")())
 
