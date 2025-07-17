@@ -11,3 +11,5 @@
 ---@field process process
 ---@field timer timer
 ---@field user user
+---@field tcp net_tcp
+---@field http net_http

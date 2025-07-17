@@ -1,0 +1,6 @@
+{
+    "name": "telnetd",
+    "desc": "telnet daemon",
+    "path": "/usr/bin/telnetd.lua",
+    "arguments": ["192.168.0.29", 200]
+}

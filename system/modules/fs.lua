@@ -18,7 +18,6 @@ fs._inode = { index = 0 }
 fs._lookup_table = {}
 fs._reserved_lookup_table = {}
 fs.save_inode_lookup = true
-fs._initialized = false
 
 ---@alias fs_mode
 ---| '"r"'   # read
@@ -123,7 +122,9 @@ end
 local function fs_lookup_inode()
     local filesystem = filesystem
     local stack = { { path = "/", parent = "1" } }
-    fs.createInode("/")
+    if not fs._inode["1"] then
+        fs.createInode("/")
+    end
     fs._lookup_table["/"] = "1"
     while #stack > 0 do
         local current = table.remove(stack)
@@ -133,14 +134,9 @@ local function fs_lookup_inode()
         for _, value in ipairs(list) do
             local fullpath = fs_concat(path, value)
             if not fs._lookup_table[fullpath] then
-                local child_inode = fs.createInode(fullpath)
-                if parent then
-                    child_inode.parent = parent
-                    local inode = fs._inode[parent]
-                    inode.children = inode.children or {}
-                    table.insert(inode.children, child_inode.id)
-                end
-            elseif fs._lookup_table[fullpath] then
+                fs.createInode(fullpath)
+            end
+            if fs._lookup_table[fullpath] and not fs._reserved_lookup_table[fs._lookup_table[fullpath]] then
                 fs._reserved_lookup_table[fs._lookup_table[fullpath]] = fullpath
             end
             if filesystem.isDirectory(fs_combinemount(fullpath)) then
@@ -150,7 +146,6 @@ local function fs_lookup_inode()
         ::continue::
     end
     fs_update_inode_file()
-    fs._initialized = true
 end
 
 local function fs_init_inode()
@@ -328,10 +323,10 @@ function fs.createInode(path)
     if kernel.currentUser > -1 then
         u = user.getUserByUID(kernel.currentUser)
     end
-    local parent_id
-    if fs._initialized then
-        local parent = fs.attributes(fs.resolvePath(fs.getParent(path)))
-        parent_id = parent and parent.id or "1"
+    local parent = fs._inode[fs._lookup_table[fs.resolvePath(fs.getParent(path))]]
+    local parent_id = parent and parent.id or "1"
+    if parent then
+        table.insert(parent.children, ino_id)
     end
     ---@type inode
     local inode = {
@@ -348,17 +343,22 @@ function fs.createInode(path)
         children = {},
         parent = parent_id or "1"
     }
-    fs._inode[ino_id] = inode
-    fs._lookup_table[path] = ino_id
-    fs._reserved_lookup_table[ino_id] = path
-    fs._inode.index = fs._inode.index + 1
-    return inode
+    if not fs._reserved_lookup_table[ino_id] then
+        fs._reserved_lookup_table[ino_id] = path
+    end
+    if fs._lookup_table[path] then
+        return fs._inode[fs._lookup_table[path]]
+    else
+        fs._inode[ino_id] = inode
+        fs._lookup_table[path] = ino_id
+        fs._inode.index = fs._inode.index + 1
+        return inode
+    end
 end
 
 function fs.createLinkInode(path, targetPath)
     path = fs.resolvePath(path)
     targetPath = fs.resolvePath(targetPath)
-    printk(targetPath)
     local root_path = fs_combinemount(path)
     local size = 0
     local time = os.time()
@@ -370,10 +370,10 @@ function fs.createLinkInode(path, targetPath)
     if kernel.currentUser > -1 then
         u = user.getUserByUID(kernel.currentUser)
     end
-    local parent_id
-    if fs._initialized then
-        local parent = fs.attributes(fs.resolvePath(fs.getParent(path)))
-        parent_id = parent and parent.id or "1"
+    local parent = fs._inode[fs._lookup_table[fs.resolvePath(fs.getParent(path))]]
+    local parent_id = parent and parent.id or "1"
+    if parent then
+        table.insert(parent.children, ino_id)
     end
     ---@type inode
     local inode = {
@@ -391,12 +391,14 @@ function fs.createLinkInode(path, targetPath)
         parent = parent_id or "1",
         link = path
     }
+    if not fs._reserved_lookup_table[ino_id] then
+        fs._reserved_lookup_table[ino_id] = path
+    end
     if fs._lookup_table[targetPath] then
         return fs._inode[fs._lookup_table[targetPath]]
     else
         fs._inode[ino_id] = inode
         fs._lookup_table[targetPath] = ino_id
-        fs._reserved_lookup_table[ino_id] = targetPath
         fs._inode.index = fs._inode.index + 1
         return inode
     end
@@ -404,7 +406,6 @@ end
 
 ---@return integer|nil, string|nil
 function fs.getPermission(path)
-    path = fs.resolvePath(path)
     local inode, err = fs.attributes(path)
     return inode and inode.mode or nil, err
 end
@@ -412,7 +413,6 @@ end
 ---@param perm integer 777(rwxrwxrwx), 755(rwxr-xr-x)
 ---@return string|nil
 function fs.setPermission(path, perm)
-    path = fs.resolvePath(path)
     local inode, err = fs.attributes(path)
     if inode then
         local uid = kernel.getCurrentProcess() and kernel.getCurrentProcess().euid or 0
@@ -430,7 +430,6 @@ end
 ---@param newOwner integer uid
 ---@return string|nil
 function fs.changeOwner(path, newOwner)
-    path = fs.resolvePath(path)
     local inode, err = fs.attributes(path)
     if inode then
         local uid = kernel.getCurrentProcess() and kernel.getCurrentProcess().euid or 0
@@ -446,7 +445,6 @@ function fs.changeOwner(path, newOwner)
 end
 
 function fs.isDirectory(path)
-    path = fs.resolvePath(path)
     local inode = fs.attributes(path)
     if inode then
         return inode.type == "dir"
@@ -535,7 +533,6 @@ end
 
 --- @param mode fs_mode
 function fs.checkPermission(path, mode)
-    path = fs.resolvePath(path)
     local proc = kernel.getCurrentProcess() or { suid = 0, euid = 0, uid = 0 }
     if proc.euid == 0 then
         return true
@@ -575,7 +572,6 @@ end
 
 ---@param action fs_action
 function fs.canAction(path, action)
-    path = fs.resolvePath(path)
     local proc = kernel.getCurrentProcess() or { suid = 0, euid = 0, uid = 0 }
     if proc.euid == 0 then
         return true
@@ -655,7 +651,7 @@ end
 ---@return boolean, string|nil
 function fs.remove(path)
     path = fs.resolvePath(path)
-    if fs.exists(path) then
+    if path and fs.exists(path) then
         local deny = false
         if fs.isDirectory(path) then
             deny = not fs.canAction(path, "w") or not fs.canAction(path, "x")
@@ -670,9 +666,13 @@ function fs.remove(path)
         if inode and filesystem.remove(fs_combinemount(path)) then
             for index, value in ipairs(inode.children) do
                 fs._inode[value] = nil
-                fs._lookup_table[fs._reserved_lookup_table[value]] = nil
+                if fs._reserved_lookup_table[value] then
+                    fs._lookup_table[fs._reserved_lookup_table[value]] = nil
+                end
+                fs._reserved_lookup_table[value] = nil
             end
             fs._inode[fs._lookup_table[path]] = nil
+            fs._reserved_lookup_table[fs._lookup_table[path]] = nil
             fs._lookup_table[path] = nil
             fs_update_inode_file()
             return true, nil
@@ -682,10 +682,6 @@ function fs.remove(path)
 end
 
 function fs.list(path)
-    path = fs.resolvePath(path)
-    if not path then
-        return nil, "No such file or directory"
-    end
     if fs.canAction(path, "r") then
         local inode = fs.attributes(path)
         if not inode then
@@ -696,12 +692,25 @@ function fs.list(path)
         end
         local list = {}
         for index, value in ipairs(inode.children) do
-            table.insert(list, fs._reserved_lookup_table[value])
+            local p = fs._reserved_lookup_table[value]
+            if not p then
+                printk("fs: unable to get inode#" .. value .. "'s path")
+            else
+                table.insert(list, fs.getName(p))
+            end
         end
         return list
     else
         return nil, "Permission Denied"
     end
+end
+
+function fs.getName(path)
+    path = fs.resolvePath(path)
+    if path == "/" then return "/" end
+
+    local name = path:match("([^/]+)/?$")
+    return name or path
 end
 
 return fs, "fs"

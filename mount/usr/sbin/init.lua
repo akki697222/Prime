@@ -20,9 +20,9 @@ local colors = fbcon.ansicolors
 
 std.print()
 std.print("   " ..
-colors.green ..
-"OpenOC " ..
-colors.cyan .. init._VERSION .. colors.reset .. " is starting up " .. colors.bright_blue .. os_name .. colors.reset)
+    colors.green ..
+    "OpenOC " ..
+    colors.cyan .. init._VERSION .. colors.reset .. " is starting up " .. colors.bright_blue .. os_name .. colors.reset)
 std.print()
 
 ---@class openoc_service
@@ -69,18 +69,19 @@ end
 
 function init.initd()
     local services = {}
-    local list = fs.list("/etc/init.d")
-    if list then
-        for index, value in ipairs(list) do
-            if value:sub(-8) == ".service" then
-                local file, err = fs.open(fs.combine("/etc/init.d", value))
-                services[#services + 1] = os.decodeTable(file:readAll())
+    for index, value in ipairs(fs.list("/etc/init.d/")) do
+        if value:sub(-8) == ".service" then
+            local file, err = fs.open(fs.combine("/etc/init.d", value))
+            if not file then
+                printk("init: failed to start service: " .. err)
+            else
+                services[#services + 1] = json.decode(file:readAll())
                 file:close()
             end
         end
-        for index, value in ipairs(services) do
-            init.start(value)
-        end
+    end
+    for index, value in ipairs(services) do
+        init.start(value)
     end
 end
 
@@ -139,7 +140,6 @@ if not fs.exists("/etc/init.d") then
     fs.makeDirectory("/etc/init.d")
 end
 
-init.initd()
 init.setupDirectory()
 if not fs.exists("/etc/init.d/firstboot") then
     fs.open("/etc/init.d/firstboot", "w"):close()
@@ -148,6 +148,7 @@ if not fs.exists("/etc/init.d/firstboot") then
 end
 
 init.makeBinExecutable()
+init.initd()
 
 init.start({
     name = "login",

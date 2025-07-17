@@ -34,7 +34,6 @@ end
 
 argparse = loadfile("/system/lib/argparse.lua", _ENV)()
 sha2 = loadfile("/system/lib/sha2for51.lua", _ENV)()
----@deprecated Deprecated due to memory consumption issues with concat
 json = loadfile("/system/lib/dkjson.lua", _ENV)()
 LibDeflate = loadfile("/system/lib/LibDeflate.lua", _ENV)()
 
@@ -89,6 +88,9 @@ local function boot()
     local vt1 = vt.create(1)
     kernel.std = vt1:std()
     fbcon.ansi = true
+
+    _ENV["tcp"] = tcp
+    _ENV["http"] = http
 
     -- execute kernel main loop
     fbcon.early_output = false

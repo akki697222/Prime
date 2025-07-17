@@ -166,6 +166,7 @@ function kernel.getEnv()
         group = group,
         ---@type permission
         permission = permission,
+        json = json,
         styledPrint = function(printTable)
             local len = {}
             for _, row in ipairs(printTable) do
