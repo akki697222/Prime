@@ -27,7 +27,7 @@ local kernel = {}
 ---@field sig_handlers table<integer, function> process signal handlers
 ---@field tty integer tty device id
 
-kernel._version = "1.2.0-dev-OC " .. _VERSION
+kernel._version = "1.2.1-dev-OC in " .. _VERSION
 ---@type table<process_entry>
 kernel.process = {}
 kernel.threads = {}
@@ -225,7 +225,12 @@ local function kernel_wrap_with_traceback(func)
         local function err_handler(err)
             return debug.traceback(err, 2)
         end
-        local ok, result = xpcall(func, err_handler, ...)
+        local ok, result
+        if GLOBAL_PRECISE_TRACEBACK then
+            ok, result = xpcall(func, err_handler, ...)
+        else
+            ok, result = pcall(func, ...)
+        end
         if not ok then
             error(result)
         end
@@ -481,9 +486,8 @@ function kernel.main()
 
             for _, proc in ipairs(process_list) do
                 printk("Sending SIGTERM to process " .. proc.pid .. " (" .. proc.path .. ")")
-                kernel.signal(proc.pid, signals.SIGTERM)
-                local timeouted = os.waitProcess(proc.pid, 50)
-                if timeouted then
+                kernel.signal(proc.pid, process.signals.SIGTERM)
+                if os.waitProcess(proc.pid, 5) then
                     printk("Timeout process " .. proc.pid)
                     kernel.killProcess(proc.pid)
                 else
@@ -493,7 +497,7 @@ function kernel.main()
 
             module.unloadAll()
             fs.closeAllHandles()
-            computer.shutdown(ev[2])
+            --computer.shutdown(ev[2])
         end
     end)
     fs.createLink("/usr/bin", "/bin")

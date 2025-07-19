@@ -60,7 +60,12 @@ function module.load(path)
             load = load,
             unload = unload
         }
-        local s, e = pcall(load)
+        local s, e
+        if GLOBAL_PRECISE_TRACEBACK then
+            s, e = xpcall(load, debug.traceback)
+        else
+            s, e = pcall(load, debug.traceback)
+        end
         if not s then
             mod_loaderror(path, e)
             return

@@ -13,7 +13,7 @@ timer._timers = {}
 function timer.set(id, time)
     if not timer._timers[id] then
         timer._timers[id] = {
-            time = os.time() * (1000 / 72) + time
+            time = os.time() + time
         }
     end
 end
@@ -23,7 +23,7 @@ function timer.check(id)
     if not t then
         return false
     end
-    if os.time() * (1000 / 72) >= t.time then
+    if os.time() >= t.time then
         timer._timers[id] = nil
         return true
     end

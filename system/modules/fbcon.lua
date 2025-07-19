@@ -148,12 +148,12 @@ local function fbcon_create_blinker_thread()
         fbcon._blinkertid = kernel.createThread(function()
             while true do
                 if fbcon._blinkstate then
-                    timer.set(100, 5)
+                    timer.set(100, 0.5)
                     if timer.check(100) then
                         fbcon._blinkstate = false
                     end
                 else
-                    timer.set(100, 5)
+                    timer.set(100, 0.5)
                     if timer.check(100) then
                         fbcon._blinkstate = true
                     end

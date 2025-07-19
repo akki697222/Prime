@@ -12,7 +12,6 @@ local os = {}
 os.clock = _os.clock
 os.date = _os.date
 os.difftime = _os.difftime
-local timeZoneOffset = OS_DEFAULT_TIME_ZONE_OFFSET
 
 function os.time()
     return getRealTime()
@@ -157,9 +156,9 @@ function os.waitProcess(pid, timeout)
     while true do
         timer.set(pid + 10000, timeout)
         if not kernel.getProcess(pid) then
-            return true
-        elseif timer.check(pid + 10000) then
             return false
+        elseif timer.check(pid + 10000) then
+            return true
         end
         coroutine.yield()
     end

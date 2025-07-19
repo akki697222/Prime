@@ -20,12 +20,12 @@ process.setSignalHandler(process.signals.SIGINT, function ()
 end)
 
 while true do
-    local p = process.cwd()
+    local p = pwd
     if p == home then
         p = "~"
     end
     local colors = fbcon.ansicolors
-    std.write(colors.green .. user.getCurrent().username .. colors.reset .. ":" .. colors.blue .. pwd .. colors.reset .. (user.checkRoot() and "#" or "$") .. " ")
+    std.write(colors.green .. user.getCurrent().username .. colors.reset .. ":" .. colors.blue .. p .. colors.reset .. (user.checkRoot() and "#" or "$") .. " ")
     local input = std.readline()
     local args = {}
     for v in string.gmatch(input, "%S+") do
