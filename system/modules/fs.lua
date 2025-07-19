@@ -17,7 +17,6 @@ fs._init = false
 fs._inode = { index = 0 }
 fs._lookup_table = {}
 fs._reserved_lookup_table = {}
-fs.save_inode_lookup = true
 
 ---@alias fs_mode
 ---| '"r"'   # read
@@ -59,7 +58,15 @@ local function fs_update_inode_file()
     local handle = filesystem.open(FS_INODE_FILE, "w")
     filesystem.write(handle, os.encodeTable(fs._inode))
     filesystem.close(handle)
-    if fs.save_inode_lookup then
+    if FS_SAVE_LOOKUP_TABLE then
+        if filesystem.exists(FS_INODE_LOOKUP_FILE) then
+            filesystem.remove(FS_INODE_LOOKUP_FILE)
+        end
+        local handle = filesystem.open(FS_INODE_LOOKUP_FILE, "w")
+        filesystem.write(handle, os.encodeTable(fs._lookup_table))
+        filesystem.close(handle)
+    end
+    if FS_SAVE_RESERVED_LOOKUP_TABLE then
         if filesystem.exists(FS_INODE_LOOKUP_FILE) then
             filesystem.remove(FS_INODE_LOOKUP_FILE)
         end
@@ -325,17 +332,6 @@ function fs.createInode(path)
     end
     local parent = fs._inode[fs._lookup_table[fs.resolvePath(fs.getParent(path))]]
     local parent_id = parent and parent.id or "1"
-    if parent then
-        local f = false
-        for index, value in ipairs(parent.children) do
-            if value == ino_id then
-                f = true
-            end
-        end
-        if not f then
-            table.insert(parent.children, ino_id)
-        end
-    end
     ---@type inode
     local inode = {
         mode = filesystem.isDirectory(root_path) and 755 or 644,
@@ -360,6 +356,17 @@ function fs.createInode(path)
         fs._inode[ino_id] = inode
         fs._lookup_table[path] = ino_id
         fs._inode.index = fs._inode.index + 1
+        if parent then
+            local f = false
+            for index, value in ipairs(parent.children) do
+                if value == ino_id then
+                    f = true
+                end
+            end
+            if not f then
+                table.insert(parent.children, ino_id)
+            end
+        end
         return inode
     end
 end
@@ -379,20 +386,8 @@ function fs.createLinkInode(path, targetPath)
         u = user.getUserByUID(kernel.currentUser)
     end
     local parent_path = fs.getParent(targetPath)
-    printk(parent_path)
     local parent = fs.attributes(parent_path)
     local parent_id = parent and parent.id or "1"
-    if parent then
-        local f = false
-        for index, value in ipairs(parent.children) do
-            if value == ino_id then
-                f = true
-            end
-        end
-        if not f then
-            table.insert(parent.children, ino_id)
-        end
-    end
     ---@type inode
     local inode = {
         mode = 777,
@@ -410,7 +405,7 @@ function fs.createLinkInode(path, targetPath)
         link = path
     }
     if not fs._reserved_lookup_table[ino_id] then
-        fs._reserved_lookup_table[ino_id] = path
+        fs._reserved_lookup_table[ino_id] = targetPath
     end
     if fs._lookup_table[targetPath] then
         return fs._inode[fs._lookup_table[targetPath]]
@@ -418,6 +413,17 @@ function fs.createLinkInode(path, targetPath)
         fs._inode[ino_id] = inode
         fs._lookup_table[targetPath] = ino_id
         fs._inode.index = fs._inode.index + 1
+        if parent then
+            local f = false
+            for index, value in ipairs(parent.children) do
+                if value == ino_id then
+                    f = true
+                end
+            end
+            if not f then
+                table.insert(parent.children, ino_id)
+            end
+        end
         return inode
     end
 end
@@ -539,7 +545,7 @@ function fs.open(path, mode)
     function file:readAll()
         local inode = fs.attributes(path)
         inode.atime = os.time()
-        
+
         local content = ""
         while true do
             local chunk, err = filesystem.read(handle, FS_READ_CHUNK_SIZE)
@@ -657,7 +663,10 @@ function fs.makeDirectory(path)
             fs.makeDirectory(parentDir)
         end
         filesystem.makeDirectory(real_path)
-        fs.createInode(path)
+        local r = fs.attributes(path)
+        if not r then
+            fs.createInode(path)
+        end
         fs_update_inode_file()
         return true
     end
@@ -699,15 +708,24 @@ function fs.remove(path)
             for index, value in ipairs(inode.children) do
                 fs._inode[value] = nil
                 if fs._reserved_lookup_table[value] then
-                    fs._lookup_table[fs._reserved_lookup_table[value]] = nil
+                    fs._reserved_lookup_table[value] = nil
                 end
-                fs._reserved_lookup_table[value] = nil
+                for path, ino_id in pairs(fs._lookup_table) do
+                    if ino_id == value then
+                        fs._lookup_table[path] = nil
+                    end
+                end
             end
-            fs._inode[fs._lookup_table[path]] = nil
-            fs._reserved_lookup_table[fs._lookup_table[path]] = nil
+            fs._inode[inode.id] = nil
+            fs._reserved_lookup_table[inode.id] = nil
+            for path, ino_id in pairs(fs._lookup_table) do
+                if ino_id == inode.id then
+                    fs._lookup_table[path] = nil
+                end
+            end
             fs._lookup_table[path] = nil
             fs_update_inode_file()
-            return true, nil
+            return true
         end
     end
     return false, "No such file or directory"
