@@ -10,7 +10,7 @@ local module_info = {
     desc = "teletype writer",
     version = "1.0.0-dev-OC",
     author = "akki697222",
-    depends = {"/lib/modules/kernel/devfs.lua"}
+    depends = {"/usr/lib/modules/kernel/devfs.lua"}
 }
 
 local special_keycodes = {

@@ -13,6 +13,7 @@ end
 
 local home = args[1] or "/root"
 process.cwd(home)
+local pwd = home
 
 process.setSignalHandler(process.signals.SIGINT, function ()
     -- nop
@@ -24,7 +25,7 @@ while true do
         p = "~"
     end
     local colors = fbcon.ansicolors
-    std.write(colors.green .. user.getCurrent().username .. colors.reset .. ":" .. colors.blue .. p .. colors.reset .. (user.checkRoot() and "#" or "$") .. " ")
+    std.write(colors.green .. user.getCurrent().username .. colors.reset .. ":" .. colors.blue .. pwd .. colors.reset .. (user.checkRoot() and "#" or "$") .. " ")
     local input = std.readline()
     local args = {}
     for v in string.gmatch(input, "%S+") do
@@ -42,9 +43,11 @@ while true do
             if not fs.isDirectory(path) then
                 sh_err(command, path .. ": not a directory")
             else
-                local newDir, err process.cwd(path)
-                if not newDir and err then
+                local newDir, err = process.cwd(path)
+                if not newDir then
                     sh_err(command, path .. ": " .. err)
+                else
+                    pwd = path
                 end
             end
         end

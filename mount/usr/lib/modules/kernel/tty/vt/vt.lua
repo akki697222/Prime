@@ -8,7 +8,7 @@ local module_info = {
     desc = "virtual terminal",
     version = "1.0.0-dev-OC",
     author = "akki697222",
-    depends = {"/lib/modules/kernel/tty/tty.lua"}
+    depends = {"/usr/lib/modules/kernel/tty/tty.lua"}
 }
 
 function vt.create(tty_id)

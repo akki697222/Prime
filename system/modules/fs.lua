@@ -136,14 +136,14 @@ local function fs_lookup_inode()
             if not fs._lookup_table[fullpath] then
                 fs.createInode(fullpath)
             end
-            if fs._lookup_table[fullpath] and not fs._reserved_lookup_table[fs._lookup_table[fullpath]] then
-                fs._reserved_lookup_table[fs._lookup_table[fullpath]] = fullpath
-            end
             if filesystem.isDirectory(fs_combinemount(fullpath)) then
                 table.insert(stack, { path = fullpath, parent = fs._lookup_table[fullpath] })
             end
         end
         ::continue::
+    end
+    for path, ino_id in pairs(fs._lookup_table) do
+        fs._reserved_lookup_table[ino_id] = path
     end
     fs_update_inode_file()
 end
@@ -326,7 +326,15 @@ function fs.createInode(path)
     local parent = fs._inode[fs._lookup_table[fs.resolvePath(fs.getParent(path))]]
     local parent_id = parent and parent.id or "1"
     if parent then
-        table.insert(parent.children, ino_id)
+        local f = false
+        for index, value in ipairs(parent.children) do
+            if value == ino_id then
+                f = true
+            end
+        end
+        if not f then
+            table.insert(parent.children, ino_id)
+        end
     end
     ---@type inode
     local inode = {
@@ -370,10 +378,20 @@ function fs.createLinkInode(path, targetPath)
     if kernel.currentUser > -1 then
         u = user.getUserByUID(kernel.currentUser)
     end
-    local parent = fs._inode[fs._lookup_table[fs.resolvePath(fs.getParent(path))]]
+    local parent_path = fs.getParent(targetPath)
+    printk(parent_path)
+    local parent = fs.attributes(parent_path)
     local parent_id = parent and parent.id or "1"
     if parent then
-        table.insert(parent.children, ino_id)
+        local f = false
+        for index, value in ipairs(parent.children) do
+            if value == ino_id then
+                f = true
+            end
+        end
+        if not f then
+            table.insert(parent.children, ino_id)
+        end
     end
     ---@type inode
     local inode = {
@@ -444,6 +462,16 @@ function fs.changeOwner(path, newOwner)
     end
 end
 
+function fs.isLink(path)
+    path = fs.normalizePath(path)
+    local inode = fs._inode[fs._lookup_table[path]]
+    if inode then
+        return inode.type == "symlink"
+    else
+        return false
+    end
+end
+
 function fs.isDirectory(path)
     local inode = fs.attributes(path)
     if inode then
@@ -484,6 +512,7 @@ function fs.open(path, mode)
 
     local inode = fs.attributes(path)
 
+    ---@class file
     local file = {
         handle = handle,
         mode = mode,
@@ -508,6 +537,9 @@ function fs.open(path, mode)
     end
 
     function file:readAll()
+        local inode = fs.attributes(path)
+        inode.atime = os.time()
+        
         local content = ""
         while true do
             local chunk, err = filesystem.read(handle, FS_READ_CHUNK_SIZE)
@@ -693,9 +725,7 @@ function fs.list(path)
         local list = {}
         for index, value in ipairs(inode.children) do
             local p = fs._reserved_lookup_table[value]
-            if not p then
-                printk("fs: unable to get inode#" .. value .. "'s path")
-            else
+            if p then
                 table.insert(list, fs.getName(p))
             end
         end

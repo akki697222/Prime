@@ -242,7 +242,7 @@ function kernel.exec(path, args, nice, env, pid)
     path = fs.resolvePath(path)
     if not path then
         return -1, "resolvePath returned nil"
-    end 
+    end
     ---@type inode
     local attr = fs.attributes(path)
     if not fs.exists(path) then
@@ -498,6 +498,7 @@ function kernel.main()
     end)
     fs.createLink("/usr/bin", "/bin")
     fs.createLink("/usr/sbin", "/sbin")
+    fs.createLink("/usr/lib", "/lib")
     local pid, err = kernel.exec(INIT_EXEC, { GLOBAL_OS_NAME }, 0, _ENV, INIT_PID)
     if pid == -1 then
         panic("failed to start init process", err)

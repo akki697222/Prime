@@ -61,8 +61,9 @@ if args.l then
         local ftype = "-"
         if fs.isDirectory(fullpath) then
             ftype = "d"
-        --elseif fs.isLink(fullpath) then
-        --    ftype = "l"
+        end
+        if fs.isLink(fullpath) then
+            ftype = "l"
         end
 
         -- パーミッション（mode）
