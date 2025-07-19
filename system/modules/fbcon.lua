@@ -414,10 +414,20 @@ function fbcon.update()
 
             fbcon.cx = fbcon.x_offset
             for _, segment in ipairs(currentLine or {}) do
+                local segmentLength = #segment.text
+                if fbcon.cx + segmentLength > fbcon.width then
+                    yScreen = yScreen + 1
+                    fbcon.cx = fbcon.x_offset
+                    if yScreen > fbcon.height then
+                        fbcon.y_scroll = fbcon.y_scroll + 1
+                        break
+                    end
+                    gpu.fill(fbcon.x_offset, yScreen, fbcon.width, 1, " ")
+                end
                 gpu.setForeground(segment.fg)
                 gpu.setBackground(segment.bg)
                 gpu.set(fbcon.cx, yScreen, segment.text)
-                fbcon.cx = fbcon.cx + #segment.text
+                fbcon.cx = fbcon.cx + segmentLength
             end
 
             fbcon._lastBuffer[y] = {}
