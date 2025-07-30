@@ -478,6 +478,16 @@ function fs.isLink(path)
     end
 end
 
+function fs.getLink(path)
+    path = fs.normalizePath(path)
+    local inode = fs._inode[fs._lookup_table[path]]
+    if inode and inode.type == "symlink" then
+        return inode.link
+    else
+        return nil
+    end
+end
+
 function fs.isDirectory(path)
     local inode = fs.attributes(path)
     if inode then

@@ -76,6 +76,7 @@ local function boot()
     printk("Memory Avaliable: " .. math.floor(computer.totalMemory() / 1024) .. "KB")
 
     -- initializing devices and system component
+    component.proxy(computer.getBootAddress()).makeDirectory("/system/data")
     fs.init()
     kernel.std = fbcon.getstd()
     group.init()

@@ -1,2 +1,1 @@
-local args = {...}
-printk(args[1])
+printk(table.concat({...}, " "))

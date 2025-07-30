@@ -1,1 +1,1 @@
-std.print(...)
+std.print(table.concat({...}, " "))

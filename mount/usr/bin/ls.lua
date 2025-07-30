@@ -57,6 +57,10 @@ if args.l then
             goto continue
         end
 
+        if name:sub(-1) == "/" then
+            name = name:sub(1, -2)
+        end
+
         -- ファイルタイプ
         local ftype = "-"
         if fs.isDirectory(fullpath) then
@@ -64,6 +68,7 @@ if args.l then
         end
         if fs.isLink(fullpath) then
             ftype = "l"
+            name = name .. " -> " .. fs.getLink(fullpath)
         end
 
         -- パーミッション（mode）
@@ -82,10 +87,6 @@ if args.l then
         -- 更新日時
         local mtime = formatTime(attr.mtime and attr.mtime / 1000 or 0)
 
-        if name:sub(-1) == "/" then
-            name = name:sub(1, -2)
-        end
-        
         table.insert(tbl, {ftype .. perms, owner, group, size, mtime, name})
 
         items = items + 1
